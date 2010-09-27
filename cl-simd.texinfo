@@ -32,13 +32,25 @@ ECL and SBCL (x86-64 only).
 The package defines and/or exports the following types to
 represent 128-bit SSE register contents:
 
-@example
-(sse-pack &optional item)
+@anchor{Type sse:sse-pack}
+@deftp {Type} @somepkg{sse-pack,sse} @&optional item-type
+The generic SSE pack type.
+@end deftp
 
-int-sse-pack = (sse-pack integer)
-float-sse-pack = (sse-pack single-float)
-double-sse-pack = (sse-pack double-float)
-@end example
+@anchor{Type sse:int-sse-pack}
+@deftp {Type} @somepkg{int-sse-pack,sse}
+Same as @code{(sse-pack integer)}.
+@end deftp
+
+@anchor{Type sse:float-sse-pack}
+@deftp {Type} @somepkg{float-sse-pack,sse}
+Same as @code{(sse-pack single-float)}.
+@end deftp
+
+@anchor{Type sse:double-sse-pack}
+@deftp {Type} @somepkg{double-sse-pack,sse}
+Same as @code{(sse-pack double-float)}.
+@end deftp
 
 Declaring variable types using the subtype appropriate
 for your data is likely to lead to more efficient code
@@ -46,34 +58,36 @@ for your data is likely to lead to more efficient code
 casts between any subtypes of sse-pack when needed.
 
 Printed representation of SSE packs can be controlled
-by binding @code{*sse-pack-print-mode*} to one of
-@code{NIL} (default), @code{:int}, @code{:float} or
-@code{:double}. When the variable is set to NIL, the
-implementation makes its best effort to guess from
-the data and context.
+by binding @code{*sse-pack-print-mode*}:
+
+@anchor{Variable sse:*sse-pack-print-mode*}
+@defvr {Variable} @somepkg{@earmuffs{sse-pack-print-mode},sse}
+When set to one of @code{:int}, @code{:float} or
+@code{:double}, specifies the way SSE packs are
+printed. A @code{NIL} value (default) instructs
+the implementation to make its best effort to
+guess from the data and context.
+@end defvr
 
 @node SSE array type
 @subsection SSE array type
 
-@example
-(sse-array element-type &optional dimensions)
-@end example
+@anchor{Type sse:sse-array}
+@deftp {Type} @somepkg{sse-array,sse} element-type @&optional dimensions
+Expands to a lisp array type that is efficiently
+supported by AREF-like accessors.
+It should be assumed to be a subtype of @code{SIMPLE-ARRAY}.
+The type expander signals warnings or errors if it detects
+that the element-type argument value is inappropriate or unsafe.
+@end deftp
 
-This deftype expands to a lisp array type that is
-efficiently supported by AREF-like accessors. It
-should be assumed to be a subtype of @code{SIMPLE-ARRAY}.
-
-Aligned SSE arrays can be created through the use
-of the @code{make-sse-array} function:
-
-@example
-(make-sse-array dimensions &key (element-type '(unsigned-byte 8))
-                initial-element displaced-to displaced-index-offset)
-@end example
-
-It is guaranteed to return an object of type @code{sse-array},
-and in non-displaced case ensures alignment of the beginning
-of data to the 16-byte boundary.
+@anchor{Function sse:make-sse-array}
+@deffn {Function} @somepkg{make-sse-array,sse} dimensions @&key element-type initial-element displaced-to displaced-index-offset
+Creates an object of type @code{sse-array}, or signals an error.
+In non-displaced case ensures alignment of the beginning of data to
+the 16-byte boundary.
+Unlike @code{make-array}, the element type defaults to (unsigned-byte 8).
+@end deffn
 
 On ECL this function supports full-featured displacement.
 On SBCL it has to simulate it by sharing the underlying
