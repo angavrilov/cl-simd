@@ -13,9 +13,10 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun sse-elt-shift-from-saetp (info)
     (and info
-         (not (eq (saetp-specifier info) t))
+         (subtypep (saetp-specifier info) 'number)
+         (not (saetp-fixnum-p info))
          (case (saetp-n-bits info)
-           (8 0) (16 1) (32 2) (64 3)))))
+           (8 0) (16 1) (32 2) (64 3) (128 4)))))
 
 (defglobal %%size-shift-table%%
     (let ((arr (make-array (1+ widetag-mask) :initial-element nil)))
@@ -28,13 +29,13 @@
   "A table of element size shifts for supported SSE array types.")
 
 (declaim (inline sse-elt-shift-of)
-         (ftype (function (t) (integer 0 3)) sse-elt-shift-of))
+         (ftype (function (t) (integer 0 4)) sse-elt-shift-of))
 
 (defun sse-elt-shift-of (obj)
   "Returns the SSE element size shift for the given object,
 or fails if it is not a valid SSE vector."
   (declare (optimize (safety 0)))
-  (the (integer 0 3)
+  (the (integer 0 4)
     (or (svref %%size-shift-table%%
                (if (sb-vm::%other-pointer-p obj)
                    (%other-pointer-widetag obj)
