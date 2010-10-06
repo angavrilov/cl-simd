@@ -367,8 +367,8 @@ May emit additional instructions using the temporary register."
          (iv :scs (unsigned-reg unsigned-stack immediate)))
   (:arg-types sse-pack unsigned-num))
 
-(defmacro def-sse-int-intrinsic (&whole whole name itype rtype insn cost c-name &key make-temporary immediate-arg)
-  (declare (ignore c-name))
+(defmacro def-sse-int-intrinsic (&whole whole name itype rtype insn cost c-name &key make-temporary immediate-arg defun-body)
+  (declare (ignore c-name defun-body))
   (let* ((imm (if immediate-arg '(imm)))
          (immt (if immediate-arg (list immediate-arg)))
          (unsigned? (subtypep itype 'unsigned-byte)))
