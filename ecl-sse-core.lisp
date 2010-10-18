@@ -237,11 +237,10 @@
                                           ,(fmtw "(&(#0)->array.self.~A[#1])" (second spec))))
                            known-elt-types)))))))
 
-(defmacro def-aref-intrinsic (tag val-type reader-fun writer-fun &key (check-bounds t))
+(defmacro def-aref-intrinsic (tag val-type reader-fun writer-fun &key (ref-size 16))
   `(%def-aref-intrinsic ,tag ,val-type ,(pointer-c-type-of val-type)
                         ,(get reader-fun 'c-function-name) ,(get writer-fun 'c-function-name)
-                        :bsize ,(ecase check-bounds
-                                  (t 16) ((nil) 0) (:no-gap 1))
+                        :bsize ,ref-size
                         :aux-args ,(get reader-fun 'c-call-aux-args)))
 
 (defmacro def-mem-intrinsic (name c-type ret-type c-name &key (public t)

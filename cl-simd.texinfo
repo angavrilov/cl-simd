@@ -213,6 +213,9 @@ this module implements a set of AREF-like memory accessors:
 
 @item
 @code{(ROW-MAJOR-)?AREF-[AS]?P[SDI]} for whole-pack read & write.
+
+@item
+@code{(ROW-MAJOR-)?AREF-S(S|D|I64)} for scalar read & write.
 @end itemize
 
 (Where A = aligned; S = aligned streamed write.)
@@ -222,14 +225,14 @@ array or vector, without restriction on the precise element
 type (although it should be declared at compile time to
 ensure generation of the fastest code).
 
-Additional index bound checking is done to ensure that 16
+Additional index bound checking is done to ensure that enough
 bytes of memory are accessible after the specified index.
 
 As an exception, ROW-MAJOR-AREF-PREFETCH-* does not do any
 range checks at all, because the prefetch instructions
 are officially safe to use with bad addresses. The
 AREF-PREFETCH-* and *-CLFLUSH functions do only ordinary
-index checks without the 16-byte extension.
+index checks without the usual 16-byte extension.
 
 @node Example
 @subsection Example

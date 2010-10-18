@@ -10,14 +10,18 @@
 
 ;;; Prefetch: AREF-PREFETCH-*, ROW-MAJOR-AREF-PREFETCH-*
 
-(def-aref-intrinsic #:PREFETCH-T0 nil cpu-prefetch-t0 nil :check-bounds nil)
-(def-aref-intrinsic #:PREFETCH-T1 nil cpu-prefetch-t1 nil :check-bounds nil)
-(def-aref-intrinsic #:PREFETCH-T2 nil cpu-prefetch-t2 nil :check-bounds nil)
-(def-aref-intrinsic #:PREFETCH-NTA nil cpu-prefetch-nta nil :check-bounds nil)
+(def-aref-intrinsic #:PREFETCH-T0 nil cpu-prefetch-t0 nil :ref-size 0)
+(def-aref-intrinsic #:PREFETCH-T1 nil cpu-prefetch-t1 nil :ref-size 0)
+(def-aref-intrinsic #:PREFETCH-T2 nil cpu-prefetch-t2 nil :ref-size 0)
+(def-aref-intrinsic #:PREFETCH-NTA nil cpu-prefetch-nta nil :ref-size 0)
 
-(def-aref-intrinsic #:CLFLUSH nil cpu-clflush nil :check-bounds :no-gap)
+(def-aref-intrinsic #:CLFLUSH nil cpu-clflush nil :ref-size 1)
 
 ;;; Single-float
+
+;; AREF-SS, ROW-MAJOR-AREF-SS
+
+(def-aref-intrinsic #:SS float-sse-pack mem-ref-ss mem-set-ss :ref-size 4)
 
 ;; AREF-PS, ROW-MAJOR-AREF-PS
 
@@ -33,6 +37,10 @@
 
 ;;; Double-float
 
+;; AREF-SD, ROW-MAJOR-AREF-SD
+
+(def-aref-intrinsic #:SD double-sse-pack mem-ref-sd mem-set-sd :ref-size 8)
+
 ;; AREF-PD, ROW-MAJOR-AREF-PD
 
 (def-aref-intrinsic #:PD double-sse-pack mem-ref-pd mem-set-pd)
@@ -46,6 +54,10 @@
 (def-aref-intrinsic #:SPD double-sse-pack mem-ref-apd stream-pd)
 
 ;;; Integer
+
+;; AREF-SI64, ROW-MAJOR-AREF-SI64
+
+(def-aref-intrinsic #:SI64 int-sse-pack mem-ref-si64 mem-set-si64 :ref-size 8)
 
 ;; AREF-PI, ROW-MAJOR-AREF-PI
 
