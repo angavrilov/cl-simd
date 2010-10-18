@@ -32,6 +32,7 @@
     (int-sse-pack :int-sse-pack)
     (float-sse-pack :float-sse-pack)
     (double-sse-pack :double-sse-pack)
+    (boolean :bool)
     (single-float :float)
     (double-float :double)
     (fixnum :fixnum)
@@ -160,6 +161,10 @@
   `(def-intrinsic ,name (,arg-type ,int-type ,@(if immediate-arg (list immediate-arg)))
      ,ret-type ,c-name :immediate-args ,(if immediate-arg `((arg2 ,immediate-arg)))
      :defun-body ,defun-body))
+
+(defmacro def-comparison-intrinsic (name arg-type insn cost c-name &key commutative tags)
+  (declare (ignore insn cost commutative tags))
+  `(def-intrinsic ,name (,arg-type ,arg-type) boolean ,c-name))
 
 (defmacro %def-aref-intrinsic (tag val-type c-type reader writer &key (aux-args "") (bsize 16))
   "Defines and exports macros and functios that implement vectorized array access."

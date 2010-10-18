@@ -124,6 +124,10 @@ places the set of comparison functions is extended to cover the
 full possible range.
 
 @item
+Scalar comparison predicates are named like @code{..-ss?} for
+@code{comiss}, and @code{..-ssu?} for @code{ucomiss} wrappers.
+
+@item
 Conversion functions are renamed to @code{convert-*-to-*} and
 @code{truncate-*-to-*}.
 

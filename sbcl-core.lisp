@@ -393,6 +393,40 @@ May emit additional instructions using the temporary register."
                  make-temporary)
            (inst ,insn r ,(if make-temporary 'tmp '(ensure-reg-or-mem iv)) ,@imm))))))
 
+;;; Comparison predicate intrinsics
+
+(define-vop (sse-comparison-op)
+  (:args (x :scs (sse-reg))
+         (y :scs (sse-reg sse-pack-immediate)))
+  (:arg-types sse-pack sse-pack)
+  (:policy :fast-safe)
+  (:note "inline SSE binary comparison predicate")
+  (:vop-var vop)
+  (:save-p :compute-only))
+
+(define-vop (sse-comparison-comm-op sse-comparison-op)
+  (:args (x :scs (sse-reg)
+            :load-if (not (and (sc-is x sse-pack-immediate)
+                               (sc-is y sse-reg))))
+         (y :scs (sse-reg sse-pack-immediate))))
+
+(defmacro def-comparison-intrinsic (&whole whole name arg-type insn cost c-name &key commutative tags)
+  (declare (ignore arg-type c-name))
+  (let* ()
+    `(progn
+       (export ',name)
+       (save-intrinsic-spec ,name ,whole)
+       (defknown ,name (sse-pack sse-pack) boolean (foldable flushable))
+       (define-vop (,name ,(if commutative 'sse-comparison-comm-op 'sse-comparison-op))
+         (:translate ,name)
+         (:conditional ,@tags)
+         (:generator ,cost
+           ,(if commutative
+                `(if (sc-is x sse-reg)
+                     (inst ,insn x y)
+                     (inst ,insn y x))
+                `(inst ,insn x y)))))))
+
 ;;; Memory intrinsics
 
 (define-vop (sse-load-base-op)

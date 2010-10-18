@@ -198,7 +198,18 @@
 (def-binary-intrinsic cmpunord-ss float-sse-pack cmpss 3 "_mm_cmpunord_ss" :tags (:unord))
 (def-binary-intrinsic cmpunord-ps float-sse-pack cmpps 3 "_mm_cmpunord_ps" :tags (:unord) :commutative t)
 
-#| Skipped: _mm_u?comi.*_ss  |#
+(def-comparison-intrinsic =-ss? float-sse-pack comiss 3 "_mm_comieq_ss" :commutative t :tags (:e))
+(def-comparison-intrinsic =-ssu? float-sse-pack ucomiss 3 "_mm_ucomieq_ss" :commutative t :tags (:e))
+(def-comparison-intrinsic <-ss? float-sse-pack comiss 3 "_mm_comilt_ss" :tags (:b))
+(def-comparison-intrinsic <-ssu? float-sse-pack ucomiss 3 "_mm_ucomilt_ss" :tags (:b))
+(def-comparison-intrinsic <=-ss? float-sse-pack comiss 3 "_mm_comile_ss" :tags (:be))
+(def-comparison-intrinsic <=-ssu? float-sse-pack ucomiss 3 "_mm_ucomile_ss" :tags (:be))
+(def-comparison-intrinsic >-ss? float-sse-pack comiss 3 "_mm_comigt_ss" :tags (:a))
+(def-comparison-intrinsic >-ssu? float-sse-pack ucomiss 3 "_mm_ucomigt_ss" :tags (:a))
+(def-comparison-intrinsic >=-ss? float-sse-pack comiss 3 "_mm_comige_ss" :tags (:ae))
+(def-comparison-intrinsic >=-ssu? float-sse-pack ucomiss 3 "_mm_ucomige_ss" :tags (:ae))
+(def-comparison-intrinsic /=-ss? float-sse-pack comiss 3 "_mm_comineq_ss" :commutative t :tags (:ne))
+(def-comparison-intrinsic /=-ssu? float-sse-pack ucomiss 3 "_mm_ucomineq_ss" :commutative t :tags (:ne))
 
 ;; Misc
 
@@ -337,6 +348,19 @@
 (def-binary-intrinsic cmpord-pd double-sse-pack cmppd 3 "_mm_cmpord_pd" :tags (:ord) :commutative t)
 (def-binary-intrinsic cmpunord-sd double-sse-pack cmpsd 3 "_mm_cmpunord_sd" :tags (:unord))
 (def-binary-intrinsic cmpunord-pd double-sse-pack cmppd 3 "_mm_cmpunord_pd" :tags (:unord) :commutative t)
+
+(def-comparison-intrinsic =-sd? double-sse-pack comisd 3 "_mm_comieq_sd" :commutative t :tags (:e))
+(def-comparison-intrinsic =-sdu? double-sse-pack ucomisd 3 "_mm_ucomieq_sd" :commutative t :tags (:e))
+(def-comparison-intrinsic <-sd? double-sse-pack comisd 3 "_mm_comilt_sd" :tags (:b))
+(def-comparison-intrinsic <-sdu? double-sse-pack ucomisd 3 "_mm_ucomilt_sd" :tags (:b))
+(def-comparison-intrinsic <=-sd? double-sse-pack comisd 3 "_mm_comile_sd" :tags (:be))
+(def-comparison-intrinsic <=-sdu? double-sse-pack ucomisd 3 "_mm_ucomile_sd" :tags (:be))
+(def-comparison-intrinsic >-sd? double-sse-pack comisd 3 "_mm_comigt_sd" :tags (:a))
+(def-comparison-intrinsic >-sdu? double-sse-pack ucomisd 3 "_mm_ucomigt_sd" :tags (:a))
+(def-comparison-intrinsic >=-sd? double-sse-pack comisd 3 "_mm_comige_sd" :tags (:ae))
+(def-comparison-intrinsic >=-sdu? double-sse-pack ucomisd 3 "_mm_ucomige_sd" :tags (:ae))
+(def-comparison-intrinsic /=-sd? double-sse-pack comisd 3 "_mm_comineq_sd" :commutative t :tags (:ne))
+(def-comparison-intrinsic /=-sdu? double-sse-pack ucomisd 3 "_mm_ucomineq_sd" :commutative t :tags (:ne))
 
 ;; Misc
 
