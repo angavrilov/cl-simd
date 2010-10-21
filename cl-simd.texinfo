@@ -21,6 +21,7 @@ ECL and SBCL (x86-64 only).
 * SSE pack types::
 * SSE array type::
 * Differences from C intrinsics::
+* Comparisons and NaN handling::
 * Simple extensions::
 * Lisp array accessors::
 * Example::
@@ -154,6 +155,54 @@ and made SETF-able:
 @end itemize
 
 (The @code{-ap*} version requires alignment.)
+
+@node Comparisons and NaN handling
+@subsection Comparisons and NaN handling
+
+Floating-point arithmetic intrinsics have trivial IEEE semantics
+when given QNaN and SNaN arguments. Comparisons have more complex
+behavior, detailed in the following table:
+
+@multitable { @code{/>=-ss, />=-ps} } { @code{/>=-sd, />=-pd} } { Not greater or equal } { Result for NaN } { QNaN traps }
+@item Single-float @tab Double-float @tab Condition @tab Result for NaN @tab QNaN traps
+@item @code{=-ss}, @code{=-ps} @tab @code{=-sd}, @code{=-pd} @tab Equal @tab False @tab No
+@item @code{<-ss}, @code{<-ps} @tab @code{<-sd}, @code{<-pd} @tab Less @tab False @tab Yes
+@item @code{<=-ss}, @code{<=-ps} @tab @code{<=-sd}, @code{<=-pd} @tab Less or equal @tab False @tab Yes
+@item @code{>-ss}, @code{>-ps} @tab @code{>-sd}, @code{>-pd} @tab Greater @tab False @tab Yes
+@item @code{>=-ss}, @code{>=-ps} @tab @code{>=-sd}, @code{>=-pd} @tab Greater or equal @tab False @tab Yes
+@item @code{/=-ss}, @code{/=-ps} @tab @code{/=-sd}, @code{/=-pd} @tab Not equal @tab True @tab No
+@item @code{/<-ss}, @code{/<-ps} @tab @code{/<-sd}, @code{/<-pd} @tab Not less @tab True @tab Yes
+@item @code{/<=-ss}, @code{/<=-ps} @tab @code{/<=-sd}, @code{/<=-pd} @tab Not less or equal @tab True @tab Yes
+@item @code{/>-ss}, @code{/>-ps} @tab @code{/>-sd}, @code{/>-pd} @tab Not greater @tab True @tab Yes
+@item @code{/>=-ss}, @code{/>=-ps} @tab @code{/>=-sd}, @code{/>=-pd} @tab Not greater or equal @tab True @tab Yes
+@item @code{cmpord-ss}, @code{cmpord-ps} @tab @code{cmpord-sd}, @code{cmpord-pd}
+@tab Ordered, i.e. no NaN args @tab False @tab No
+@item @code{cmpunord-ss}, @code{cmpunord-ps} @tab @code{cmpunord-sd}, @code{cmpunord-pd}
+@tab Unordered, i.e. with NaN args @tab True @tab No
+@end multitable
+
+Likewise for scalar comparison predicates, i.e. functions that return the
+result of the comparison as a Lisp boolean instead of a bitmask sse-pack:
+
+@multitable { Single-float } { Double-float } { Not greater or equal } { Result for NaN } { QNaN traps }
+@item Single-float @tab Double-float @tab Condition @tab Result for NaN @tab QNaN traps
+@item @code{=-ss?} @tab @code{=-sd?} @tab Equal @tab True @tab Yes
+@item @code{=-ssu?} @tab @code{=-sdu?} @tab Equal @tab True @tab No
+@item @code{<-ss?} @tab @code{<-sd?} @tab Less @tab True @tab Yes
+@item @code{<-ssu?} @tab @code{<-sdu?} @tab Less @tab True @tab No
+@item @code{<=-ss?} @tab @code{<=-sd?} @tab Less or equal @tab True @tab Yes
+@item @code{<=-ssu?} @tab @code{<=-sdu?} @tab Less or equal @tab True @tab No
+@item @code{>-ss?} @tab @code{>-sd?} @tab Greater @tab False @tab Yes
+@item @code{>-ssu?} @tab @code{>-sdu?} @tab Greater @tab False @tab No
+@item @code{>=-ss?} @tab @code{>=-sd?} @tab Greater or equal @tab False @tab Yes
+@item @code{>=-ssu?} @tab @code{>=-sdu?} @tab Greater or equal @tab False @tab No
+@item @code{/=-ss?} @tab @code{/=-sd?} @tab Not equal @tab False @tab Yes
+@item @code{/=-ssu?} @tab @code{/=-sdu?} @tab Not equal @tab False @tab No
+@end multitable
+
+Note that MSDN specifies different return values for the C counterparts of some
+of these functions when called with NaN arguments, but that seems to disagree
+with the actually generated code.
 
 @node Simple extensions
 @subsection Simple extensions
