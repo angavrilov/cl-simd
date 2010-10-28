@@ -187,8 +187,8 @@ Should be assumed to be SIMPLE-ARRAY, except that displacing with MAKE-SSE-ARRAY
          (rtype (or rtype '(values)))
          (index-expression
           (if (= ref-size 0)
-              ``(the index index)
-              ``(the index (%check-bound array (%sse-array-size array ,gap) index)))))
+              ``(the signed-word index)
+              ``(the signed-word (%check-bound array (%sse-array-size array ,gap) index)))))
     `(progn
        ;; ROW-MAJOR-AREF
        (export ',rm-aref)
@@ -269,8 +269,8 @@ Should be assumed to be SIMPLE-ARRAY, except that displacing with MAKE-SSE-ARRAY
                    (declare (ignorable gap))
                    (let ((syms (make-gensym-list (length stuff))))
                      `(lambda (array ,@syms)
-                        (let ((index (the index ,(if (eq is-vector :yes) (first syms)
-                                                     `(array-row-major-index array ,@(butlast syms))))))
+                        (let ((index ,(if (eq is-vector :yes) (first syms)
+                                          `(array-row-major-index array ,@(butlast syms)))))
                           (,',writer/ix-vop (array-data-expr array ,is-vector)
                                             ,,index-expression
                                             ,step ,+vector-data-fixup+

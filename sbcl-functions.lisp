@@ -59,7 +59,7 @@
                   (defun ,name (,@valarg pointer &optional (offset 0))
                     (declare ,@(if register-arg '((type sse-pack value)))
                              (type system-area-pointer pointer)
-                             (type fixnum offset))
+                             (type signed-word offset))
                     ,(if rtype
                          `(truly-the ,rtype (,vop ,@valarg pointer offset))
                          `(,vop ,@valarg pointer offset))))))
@@ -71,7 +71,7 @@
                   (defun ,name (pointer value &optional (offset 0))
                     (declare (type system-area-pointer pointer)
                              (type sse-pack value)
-                             (type fixnum offset))
+                             (type signed-word offset))
                     (,vop pointer offset value)
                     (truly-the ,rtype value))
                   ,(if setf-name

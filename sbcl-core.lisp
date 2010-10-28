@@ -461,14 +461,14 @@ May emit additional instructions using the temporary register."
 (define-vop (sse-load-ix-op sse-load-base-op)
   (:args (sap :scs (descriptor-reg) :to :eval)
          (index :scs (signed-reg immediate) :target tmp))
-  (:arg-types * signed-num (:constant fixnum) (:constant fixnum))
+  (:arg-types * signed-num (:constant fixnum) (:constant signed-word))
   (:temporary (:sc signed-reg :from (:argument 1)) tmp)
   (:info scale offset))
 
 (define-vop (sse-load-ix-op/tag sse-load-base-op)
   (:args (sap :scs (descriptor-reg) :to :eval)
          (index :scs (any-reg signed-reg immediate) :target tmp))
-  (:arg-types * tagged-num (:constant tagged-load-scale) (:constant fixnum))
+  (:arg-types * tagged-num (:constant tagged-load-scale) (:constant signed-word))
   (:temporary (:sc any-reg :from (:argument 1)) tmp)
   (:info scale offset))
 
@@ -488,7 +488,7 @@ May emit additional instructions using the temporary register."
     `(progn
        (export ',name)
        (save-intrinsic-spec ,name ,whole)
-       (defknown ,vop (,@valtype system-area-pointer fixnum) ,(or rtype '(values)) (flushable always-translatable))
+       (defknown ,vop (,@valtype system-area-pointer signed-word) ,(or rtype '(values)) (flushable always-translatable))
        (define-vop (,vop ,(if register-arg 'sse-xmm-load-op 'sse-load-op))
          (:translate ,vop)
          ,rtypes
@@ -505,7 +505,7 @@ May emit additional instructions using the temporary register."
          (,vop ,@valarg sap (+ offset1 offset2)))
        ,@(if (null register-arg)
              `(;; Vector indexing version
-               (defknown ,ix-vop (simple-array fixnum fixnum fixnum) ,(or rtype '(values))
+               (defknown ,ix-vop (simple-array signed-word fixnum signed-word) ,(or rtype '(values))
                    (flushable always-translatable))
                (define-vop (,ix-vop sse-load-ix-op)
                  (:translate ,ix-vop)
@@ -543,7 +543,7 @@ May emit additional instructions using the temporary register."
   (:args (sap :scs (descriptor-reg) :to :eval)
          (index :scs (signed-reg immediate) :target tmp)
          (value :scs (sse-reg)))
-  (:arg-types * signed-num (:constant fixnum) (:constant fixnum) sse-pack)
+  (:arg-types * signed-num (:constant fixnum) (:constant signed-word) sse-pack)
   (:temporary (:sc signed-reg :from (:argument 1)) tmp)
   (:info scale offset))
 
@@ -551,7 +551,7 @@ May emit additional instructions using the temporary register."
   (:args (sap :scs (descriptor-reg) :to :eval)
          (index :scs (any-reg signed-reg immediate) :target tmp)
          (value :scs (sse-reg)))
-  (:arg-types * tagged-num (:constant tagged-load-scale) (:constant fixnum) sse-pack)
+  (:arg-types * tagged-num (:constant tagged-load-scale) (:constant signed-word) sse-pack)
   (:temporary (:sc any-reg :from (:argument 1)) tmp)
   (:info scale offset))
 
@@ -563,7 +563,7 @@ May emit additional instructions using the temporary register."
     `(progn
        ,(unless setf-name `(export ',name))
        (save-intrinsic-spec ,name ,whole)
-       (defknown ,vop (system-area-pointer fixnum sse-pack) (values) (unsafe always-translatable))
+       (defknown ,vop (system-area-pointer signed-word sse-pack) (values) (unsafe always-translatable))
        (define-vop (,vop sse-store-op)
          (:translate ,vop)
          (:generator 5
@@ -575,7 +575,7 @@ May emit additional instructions using the temporary register."
        (def-splice-transform ,vop ((sap+ sap offset1) offset2 new-value)
          (,vop sap (+ offset1 offset2) new-value))
        ;; Vector indexing version
-       (defknown ,ix-vop (simple-array fixnum fixnum fixnum sse-pack) (values)
+       (defknown ,ix-vop (simple-array signed-word fixnum signed-word sse-pack) (values)
            (unsafe always-translatable))
        (define-vop (,ix-vop sse-store-ix-op)
          (:translate ,ix-vop)
