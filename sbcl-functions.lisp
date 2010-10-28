@@ -61,8 +61,8 @@
                              (type system-area-pointer pointer)
                              (type signed-word offset))
                     ,(if rtype
-                         `(truly-the ,rtype (,vop ,@valarg pointer offset))
-                         `(,vop ,@valarg pointer offset))))))
+                         `(truly-the ,rtype (,vop ,@valarg pointer offset 1 0))
+                         `(,vop ,@valarg pointer offset 1 0))))))
            (def-store-intrinsic (name rtype insn c-name &key setf-name &allow-other-keys)
              (declare (ignore insn c-name))
              (let* ((vop (symbolicate "%" name)))
@@ -72,7 +72,7 @@
                     (declare (type system-area-pointer pointer)
                              (type sse-pack value)
                              (type signed-word offset))
-                    (,vop pointer offset value)
+                    (,vop pointer offset 1 0 value)
                     (truly-the ,rtype value))
                   ,(if setf-name
                        `(defsetf ,setf-name (pointer &optional (offset 0)) (value)

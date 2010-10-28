@@ -196,7 +196,7 @@ Should be assumed to be SIMPLE-ARRAY, except that displacing with MAKE-SSE-ARRAY
        (defun ,rm-aref (array index)
          (with-sse-data ((sap data array)
                          (offset index))
-           (,reader-vop sap offset)))
+           (,reader-vop sap offset 1 0)))
        ;;
        (deftransform ,rm-aref ((array index) (simple-array t) * :important t)
          ,(format nil "open-code ~A" rm-aref)
@@ -212,7 +212,7 @@ Should be assumed to be SIMPLE-ARRAY, except that displacing with MAKE-SSE-ARRAY
          (declare (truly-dynamic-extent indices))
          (with-sse-data ((sap data array)
                          (offset (%array-row-major-index array indices)))
-           (,reader-vop sap offset)))
+           (,reader-vop sap offset 1 0)))
        ;;
        (defoptimizer (,aref derive-type) ((array &rest indices) node)
          (assert-array-rank array (length indices))
@@ -235,7 +235,7 @@ Should be assumed to be SIMPLE-ARRAY, except that displacing with MAKE-SSE-ARRAY
                (defun ,rm-aset (array index new-value)
                  (with-sse-data ((sap data array)
                                  (offset index))
-                   (,writer-vop sap offset (the ,rtype new-value))
+                   (,writer-vop sap offset 1 0 (the ,rtype new-value))
                    new-value))
                ;;
                (deftransform ,rm-aset ((array index value) (simple-array t t) * :important t)
@@ -255,7 +255,7 @@ Should be assumed to be SIMPLE-ARRAY, except that displacing with MAKE-SSE-ARRAY
                  (let ((new-value (car (last stuff))))
                    (with-sse-data ((sap data array)
                                    (offset (%array-row-major-index array (nbutlast stuff))))
-                     (,writer-vop sap offset (the ,rtype new-value))
+                     (,writer-vop sap offset 1 0 (the ,rtype new-value))
                      new-value)))
                ;;
                (defoptimizer (,aset derive-type) ((array &rest stuff) node)
