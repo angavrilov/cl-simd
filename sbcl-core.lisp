@@ -59,8 +59,21 @@
 
 ;;; Index-offset splicing
 
+(defun skip-casts (lvar)
+  (let ((inside (lvar-uses lvar)))
+    (if (and (cast-p inside)
+             (policy inside (= sb-c::type-check 0)))
+        (skip-casts (cast-value inside))
+        lvar)))
+
+(defun delete-casts (lvar)
+  (loop for inside = (lvar-uses lvar)
+     while (cast-p inside)
+     do (delete-filter inside lvar (cast-value inside))))
+
 (defun fold-index-addressing (fun-name index scale offset &key prefix-args postfix-args)
-  (multiple-value-bind (func index-args) (extract-fun-args index '(+ - * ash) 2)
+  (multiple-value-bind (func index-args)
+      (extract-fun-args (skip-casts index) '(+ - * ash) 2)
     (destructuring-bind (x constant) index-args
       (declare (ignorable x))
       (unless (constant-lvar-p constant)
@@ -81,10 +94,11 @@
           (unless (and (typep new-scale '(signed-byte 32))
                        (typep new-offset 'signed-word))
             (give-up-ir1-transform "constant is too large for inlining"))
+          (delete-casts index)
           (splice-fun-args index func 2)
           `(lambda (,@prefix-args thing index const scale offset ,@postfix-args)
              (declare (ignore const scale offset))
-             (,fun-name ,@prefix-args thing index ,new-scale ,new-offset ,@postfix-args)))))))
+             (,fun-name ,@prefix-args thing (the signed-word index) ,new-scale ,new-offset ,@postfix-args)))))))
 
 (deftransform fold-ref-index-addressing ((thing index scale offset) * * :defun-only t :node node)
   (fold-index-addressing (lvar-fun-name (basic-combination-fun node)) index scale offset))
