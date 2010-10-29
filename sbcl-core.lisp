@@ -59,27 +59,41 @@
 
 ;;; Index-offset splicing
 
-(defun fold-index-addressing (fun-name index scale &key setter-p prefix-args)
+(defun fold-index-addressing (fun-name index scale offset &key prefix-args postfix-args)
   (multiple-value-bind (func index-args) (extract-fun-args index '(+ - * ash) 2)
     (destructuring-bind (x constant) index-args
       (declare (ignorable x))
       (unless (constant-lvar-p constant)
         (give-up-ir1-transform))
       (let ((value (lvar-value constant))
-            (scale-value (lvar-value scale)))
-        (case func
-          (*   (unless (typep (* value scale-value) '(signed-byte 32))
-                 (give-up-ir1-transform "constant is too large for inlining")))
-          (ash (unless (and (>= value 0)
-                            (typep (ash scale-value value) '(signed-byte 32)))
-                 (give-up-ir1-transform "index shift is unsuitable for inlining"))))
-        (splice-fun-args index func 2)
-        (let* ((value-arg (when setter-p '(value)))
-               (is-scale (member func '(* ash)))
-               (new-scale (if is-scale `(,func scale const) 'scale))
-               (new-offset (if is-scale 'offset `(,func offset (* const scale)))))
-          `(lambda (,@prefix-args thing index const scale offset ,@value-arg)
-             (,fun-name ,@prefix-args thing index ,new-scale ,new-offset ,@value-arg)))))))
+            (scale-value (lvar-value scale))
+            (offset-value (lvar-value offset)))
+        (unless (integerp value)
+          (give-up-ir1-transform))
+        (multiple-value-bind (new-scale new-offset)
+            (ecase func
+              (+   (values scale-value (+ offset-value (* value scale-value))))
+              (-   (values scale-value (- offset-value (* value scale-value))))
+              (*   (values (* scale-value value) offset-value))
+              (ash (unless (>= value 0)
+                     (give-up-ir1-transform "negative index shift"))
+                   (values (ash scale-value value) offset-value)))
+          (unless (and (typep new-scale '(signed-byte 32))
+                       (typep new-offset 'signed-word))
+            (give-up-ir1-transform "constant is too large for inlining"))
+          (splice-fun-args index func 2)
+          `(lambda (,@prefix-args thing index const scale offset ,@postfix-args)
+             (declare (ignore const scale offset))
+             (,fun-name ,@prefix-args thing index ,new-scale ,new-offset ,@postfix-args)))))))
+
+(deftransform fold-ref-index-addressing ((thing index scale offset) * * :defun-only t :node node)
+  (fold-index-addressing (lvar-fun-name (basic-combination-fun node)) index scale offset))
+
+(deftransform fold-xmm-ref-index-addressing ((value thing index scale offset) * * :defun-only t :node node)
+  (fold-index-addressing (lvar-fun-name (basic-combination-fun node)) index scale offset :prefix-args '(value)))
+
+(deftransform fold-set-index-addressing ((thing index scale offset value) * * :defun-only t :node node)
+  (fold-index-addressing (lvar-fun-name (basic-combination-fun node)) index scale offset :postfix-args '(value)))
 
 ;;; Index-offset addressing
 
@@ -488,7 +502,6 @@ May emit additional instructions using the temporary register."
   (let* ((vop (symbolicate "%" name))
          (ix-vop (symbolicate vop "/IX"))
          (valtype (if register-arg '(sse-pack)))
-         (valarg (if register-arg '(value)))
          (r-arg (if rtype '(r)))
          (rtypes (if rtype
                      `(:result-types ,(type-name-to-primitive rtype))
@@ -511,9 +524,9 @@ May emit additional instructions using the temporary register."
          (:generator 4
            ,(if register-arg `(ensure-load ,rtype r value))
            (inst ,insn ,@tags ,@r-arg (make-scaled-ea ,size sap index scale offset tmp :fixnum-index t))))
-       (deftransform ,vop ((,@valarg thing index scale offset))
-         "fold semi-constant offset expressions"
-         (fold-index-addressing ',vop index scale :prefix-args ',valarg))
+       (%deftransform ',vop '(function * *)
+                      #',(if register-arg 'fold-xmm-ref-index-addressing 'fold-ref-index-addressing)
+                      "fold semi-constant offset expressions")
        ,@(if (null register-arg)
              `(;; Vector indexing version
                (defknown ,ix-vop (simple-array signed-word fixnum signed-word) ,(or rtype '(values))
@@ -528,9 +541,8 @@ May emit additional instructions using the temporary register."
                  ,rtypes
                  (:generator 3
                    (inst ,insn ,@tags ,@r-arg (make-scaled-ea ,size sap index scale offset tmp :fixnum-index t))))
-               (deftransform ,ix-vop ((thing index scale offset))
-                 "fold semi-constant index expressions"
-                 (fold-index-addressing ',ix-vop index scale)))))))
+               (%deftransform ',ix-vop '(function * *) #'fold-ref-index-addressing
+                              "fold semi-constant index expressions"))))))
 
 (define-vop (sse-store-base-op)
   (:policy :fast-safe)
@@ -585,9 +597,8 @@ May emit additional instructions using the temporary register."
          (:translate ,vop)
          (:generator 4
            (inst ,insn (make-scaled-ea :qword sap index scale offset tmp :fixnum-index t) value)))
-       (deftransform ,vop ((thing index scale offset value))
-         "fold semi-constant offset expressions"
-         (fold-index-addressing ',vop index scale :setter-p t))
+       (%deftransform ',vop '(function * *) #'fold-set-index-addressing
+                      "fold semi-constant offset expressions")
        ;; Vector indexing version
        (defknown ,ix-vop (simple-array signed-word fixnum signed-word sse-pack) (values)
            (unsafe always-translatable))
@@ -599,7 +610,6 @@ May emit additional instructions using the temporary register."
          (:translate ,ix-vop)
          (:generator 3
            (inst ,insn (make-scaled-ea :qword sap index scale offset tmp :fixnum-index t) value)))
-       (deftransform ,ix-vop ((thing index scale offset value))
-         "fold semi-constant index expressions"
-         (fold-index-addressing ',ix-vop index scale :setter-p t)))))
+       (%deftransform ',ix-vop '(function * *) #'fold-set-index-addressing
+                      "fold semi-constant index expressions"))))
 

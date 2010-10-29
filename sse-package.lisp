@@ -31,6 +31,7 @@
                 #:INSERT-ARRAY-BOUNDS-CHECKS #:VECTOR-LENGTH
                 #:ASSERT-ARRAY-RANK #:ASSERT-LVAR-TYPE
                 #:CONSTANT-LVAR-P #:LVAR-VALUE #:LVAR-TYPE
+                #:LVAR-FUN-NAME #:BASIC-COMBINATION-FUN
                 #:LEXENV-POLICY #:NODE-LEXENV
                 #:FIND-SAETP #:FIND-SAETP-BY-CTYPE)
   #+sbcl
