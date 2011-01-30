@@ -157,23 +157,46 @@ Should be assumed to be SIMPLE-ARRAY, except that displacing with MAKE-SSE-ARRAY
                (array-bounding-indices-bad-error ,array ,index (+ ,index ,access-size)))
              ,@code))))))
 
+(defun sse-array-type-info-or-give-up (type)
+  (cond ((and (array-type-p type)
+              (not (array-type-complexp type)))
+         (let* ((etype (array-type-specialized-element-type type))
+                (shift (sse-elt-shift-from-saetp
+                        (if (eq etype *wild-type*) nil
+                            (find-saetp-by-ctype etype)))))
+           (unless shift
+             (give-up-ir1-transform "not a known SSE-compatible array element type: ~S"
+                                    (type-specifier etype)))
+           (values shift
+                   (and (listp (array-type-dimensions type))
+                        (if (null (cdr (array-type-dimensions type))) :yes :no)))))
+        ((union-type-p type)
+         ;; Support unions of array types with the same elt size
+         (let (nonfirst rshift rdims)
+           (dolist (subtype (union-type-types type))
+             (multiple-value-bind (shift dims)
+                 (sse-array-type-info-or-give-up subtype)
+               (unless nonfirst
+                 (setf nonfirst t
+                       rshift shift
+                       rdims dims))
+               (unless (= rshift shift)
+                 (give-up-ir1-transform
+                  "union member types have different element sizes"))
+               (unless (eq rdims dims)
+                 (setf rdims nil))))
+           (values rshift rdims)))
+        (t
+         (give-up-ir1-transform "not a simple array type"))))
+
 (defun sse-array-info-or-give-up (lvar ref-size)
-  ;; Look up the SSE element size and check if it is definitely a vector
-  (let ((type (lvar-type lvar)))
-    (unless (and (array-type-p type)
-                 (not (array-type-complexp type)))
-      (give-up-ir1-transform "not a simple array"))
-    (let* ((etype (array-type-specialized-element-type type))
-           (shift (sse-elt-shift-from-saetp
-                   (if (eq etype *wild-type*) nil
-                       (find-saetp-by-ctype etype)))))
-      (unless shift
-        (give-up-ir1-transform "not a known SSE-compatible array element type: ~S"
-                               (type-specifier etype)))
-      (values (ash 1 shift)                 ; step
-              (ash (1- ref-size) (- shift)) ; gap
-              (and (listp (array-type-dimensions type))
-                   (if (null (cdr (array-type-dimensions type))) :yes :no))))))
+  ;; Look up the SSE element size and check if it is definitely a
+  ;; vector
+  (multiple-value-bind (shift dim-info)
+      (sse-array-type-info-or-give-up (lvar-type lvar))
+    (values (ash 1 shift)                 ; step
+            (ash (1- ref-size) (- shift)) ; gap
+            dim-info)))
 
 (defmacro def-aref-intrinsic (postfix rtype reader writer &key (ref-size 16))
   (let* ((rm-aref (symbolicate "ROW-MAJOR-AREF-" postfix))
