@@ -25,11 +25,13 @@
   (primitive-type-name (primitive-type (specifier-type lt))))
 
 (defun move-cmd-for-type (lt)
+  ;; Select a move instruction that matches the type name best
   (ecase lt
     (int-sse-pack 'movdqa)
     ((float-sse-pack double-sse-pack) 'movaps)))
 
 (defun ensure-reg-or-mem (tn)
+  ;; Spill immediate constants to inline memory
   (sc-case tn
     ((sse-pack-immediate)
      (register-inline-constant (tn-value tn)))
@@ -38,18 +40,22 @@
     (t tn)))
 
 (defmacro ensure-load (type tgt src)
+  ;; Ensure src gets to tgt, possibly from memory or immediate
   `(unless (location= ,tgt ,src)
      (inst ,(move-cmd-for-type type) ,tgt (ensure-reg-or-mem ,src))))
 
 (defmacro ensure-move (type tgt src)
+  ;; Ensure src gets to tgt; src should be a register
   `(unless (location= ,tgt ,src)
      (inst ,(move-cmd-for-type type) ,tgt ,src)))
 
 (defmacro save-intrinsic-spec (name info)
+  ;; Save forms in info for later processing (function generation)
   `(eval-when (:compile-toplevel :load-toplevel :execute)
      (setf (get ',name 'intrinsic-spec) ',info)))
 
 (defmacro def-splice-transform (name args &body code)
+  "Define a transform unpacking a superposition of function calls. Args can contain nested call specs."
   (let* ((direct-args (mapcar (lambda (x) (if (consp x) (gensym) x)) args))
          (flat-args (mapcan (lambda (x) (if (consp x) (copy-list (rest x)) (list x))) args)))
     `(deftransform ,name ((,@direct-args) * *)
@@ -62,6 +68,7 @@
 ;;; Index-offset splicing
 
 (defun skip-casts (lvar)
+  ;; In unchecked mode, skip cast nodes and return their argument
   (let ((inside (lvar-uses lvar)))
     (if (and (cast-p inside)
              (policy inside (= sb-c::type-check 0)))
@@ -69,22 +76,28 @@
         lvar)))
 
 (defun delete-casts (lvar)
+  ;; Delete outer cast nodes from the lvar
   (loop for inside = (lvar-uses lvar)
      while (cast-p inside)
      do (delete-filter inside lvar (cast-value inside))))
 
 (defun fold-index-addressing (fun-name index scale offset &key prefix-args postfix-args)
+  "Generic index expression folding transform; unpacks index into base + index*scale + offset."
+  ;; Peek into the index argument:
   (multiple-value-bind (func index-args)
       (extract-fun-args (skip-casts index) '(+ - * ash) 2)
+    ;; Found an arithmetic op in index...
     (destructuring-bind (x constant) index-args
       (declare (ignorable x))
       (unless (constant-lvar-p constant)
         (give-up-ir1-transform))
+      ;; It has one constant argument...
       (let ((value (lvar-value constant))
             (scale-value (lvar-value scale))
             (offset-value (lvar-value offset)))
         (unless (integerp value)
           (give-up-ir1-transform))
+        ;; Compute new scale and offset constants:
         (multiple-value-bind (new-scale new-offset)
             (ecase func
               (+   (values scale-value (+ offset-value (* value scale-value))))
@@ -93,14 +106,18 @@
               (ash (unless (>= value 0)
                      (give-up-ir1-transform "negative index shift"))
                    (values (ash scale-value value) offset-value)))
+          ;; Verify that the constants didn't overflow:
           (unless (and (typep new-scale '(signed-byte 32))
                        (typep new-offset 'signed-word))
             (give-up-ir1-transform "constant is too large for inlining"))
+          ;; OK, actually apply the splice:
           (delete-casts index)
           (splice-fun-args index func 2)
           `(lambda (,@prefix-args thing index const scale offset ,@postfix-args)
              (declare (ignore const scale offset))
-             (,fun-name ,@prefix-args thing (the signed-word index) ,new-scale ,new-offset ,@postfix-args)))))))
+             (,fun-name ,@prefix-args
+                        thing (the signed-word index) ,new-scale ,new-offset
+                        ,@postfix-args)))))))
 
 (deftransform fold-ref-index-addressing ((thing index scale offset) * * :defun-only t :node node)
   (fold-index-addressing (lvar-fun-name (basic-combination-fun node)) index scale offset))
@@ -114,12 +131,14 @@
 ;;; Index-offset addressing
 
 (defun is-tagged-load-scale (value)
+  ;; The scale factor can be adjusted for a tagged fixnum index
   (not (logtest value (1- (ash 1 n-fixnum-tag-bits)))))
 
 (deftype tagged-load-scale ()
   '(and fixnum (satisfies is-tagged-load-scale)))
 
 (defun find-lea-scale (scale)
+  ;; Split the scale into a LEA-compatible part and the rest
   (cond ((not (logtest scale 7)) (values (/ scale 8) 8))
         ((not (logtest scale 3)) (values (/ scale 4) 4))
         ((not (logtest scale 1)) (values (/ scale 2) 2))
@@ -157,50 +176,61 @@
      when (<= sv 1) return i))
 
 (defun make-scaled-ea (size sap index scale offset tmp &key fixnum-index)
-  "Returns an ea representing the given index*scale + offset formula.
+  "Returns an ea representing the given sap + index*scale + offset formula.
 May emit additional instructions using the temporary register."
   (assemble ()
+    ;; Check if the index is immediate too
     (if (or (sc-is index immediate) (= scale 0))
-        ;; Fully constant offset
+        ;; Fully constant offset:
         (let ((value (if (= scale 0) offset
                          (+ (* (tn-value index) scale) offset))))
           (assert (typep value '(signed-byte 64)))
+          ;; Represent the offset as an immediate, or a loaded constant
           (if (typep value '(signed-byte 32))
               (make-ea size :base sap :disp value)
               (progn
                 (inst mov tmp (register-inline-constant :qword value))
                 (make-ea size :base sap :index tmp))))
-        ;; Indexing
+        ;; Indexing required
         (progn
+          ;; If the index is tagged, adjust the scale factor:
           (when (sc-is index any-reg)
             (assert (and fixnum-index (is-tagged-load-scale scale)))
             (setf scale (ash scale (- n-fixnum-tag-bits))))
-          (multiple-value-bind (rscale lscale) (find-lea-scale scale)
+          ;; Split the scale factor for LEA
+          (multiple-value-bind (rscale outer-scale) (find-lea-scale scale)
             ;; One-instruction case?
             (if (and (= rscale 1) (typep offset '(signed-byte 32)))
+                ;; Return an EA representing the whole computation
                 (make-ea size :base sap :index index :scale scale :disp offset)
-                ;; Use temporary
-                (multiple-value-bind (roffset loffset) (split-offset offset lscale)
+                ;; Otherwise, temporary needed; so split the offset.
+                ;; outer-offset is guaranteed to be signed-byte 32
+                (multiple-value-bind (roffset outer-offset) (split-offset offset outer-scale)
+                  ;; Helpers:
                   (labels ((negate-when-<0 (register scale)
                              (when (< scale 0)
                                (inst neg register)))
                            (emit-shift-mul (register scale)
                              (inst shl register (find-power-of-2 (abs scale)))
                              (negate-when-<0 register scale))
-                           ;; Tries to compute tmp via LEA
-                           (try-use-lea (scale &optional base)
-                             (multiple-value-bind (rrscale rlscale) (find-lea-scale scale)
-                               (when (and (= (abs rrscale) 1) (typep (* rrscale roffset) '(signed-byte 32)))
-                                 (when (and (= roffset 0) (null base)) ; minimize loffset
-                                   (multiple-value-setq (roffset loffset) (floor offset lscale)))
+                           (try-use-lea (try-scale &optional base)
+                             ;; Try to compute tmp via one LEA
+                             (multiple-value-bind (rrscale in-scale) (find-lea-scale try-scale)
+                               (when (and (= (abs rrscale) 1) ; signed 1
+                                          (typep (* rrscale roffset) '(signed-byte 32)))
+                                 ;; Would work:
+                                 (when (and (= roffset 0) (null base)) ; minimize outer-offset
+                                   (multiple-value-setq (roffset outer-offset) (floor offset outer-scale)))
                                  (let ((xoffset (* rrscale roffset)))
                                    (inst lea tmp
-                                         (if (and (= rlscale 1) (null base))
+                                         (if (and (= in-scale 1) (null base))
                                              (make-ea :byte :base index :disp xoffset)
-                                             (make-ea :byte :base base :index index :scale rlscale :disp xoffset))))
+                                             (make-ea :byte :base base :index index
+                                                      :scale in-scale :disp xoffset))))
                                  (negate-when-<0 tmp rrscale)
                                  :success))))
                     (declare (inline negate-when-<0 emit-shift-mul))
+                    ;; Select the best way to compute the temporary:
                     (cond
                       ;; same register shift?
                       ((and (= roffset 0) (location= tmp index) (power-of-2? (abs rscale)))
@@ -216,20 +246,23 @@ May emit additional instructions using the temporary register."
                              (emit-shift-mul tmp rscale))
                            (inst imul tmp index rscale))
                        (unless (= roffset 0)
-                         ;; Make loffset as small as possible
-                         (multiple-value-setq (roffset loffset) (floor offset lscale))
+                         ;; Make outer-offset as small as possible
+                         (multiple-value-setq (roffset outer-offset) (floor offset outer-scale))
+                         ;; Emit ADD for the offset
                          (if (typep roffset '(signed-byte 32))
                              (inst add tmp roffset)
                              (inst add tmp (register-inline-constant :qword roffset))))))
-                    (make-ea size :base sap :index tmp :scale lscale :disp loffset)))))))))
+                    ;; Return the final EA definition:
+                    (make-ea size :base sap :index tmp :scale outer-scale :disp outer-offset)))))))))
 
 ;; Initialization
 
-(defmacro def-float-set-intrinsic (&whole whole pubname fname atype aregtype rtype move)
+(defmacro def-float-set-intrinsic (&whole whole pubname fname atype aregtype rtype move-insn)
   (declare (ignore pubname))
   `(progn
      (save-intrinsic-spec ,fname ,whole)
      (defknown ,fname (,atype) ,rtype (foldable flushable))
+     ;;
      (define-vop (,fname)
        (:translate ,fname)
        (:args (arg :scs (,aregtype) :target dst))
@@ -239,7 +272,7 @@ May emit additional instructions using the temporary register."
        (:policy :fast-safe)
        (:generator 1
          (unless (location= dst arg)
-           (inst ,move dst arg))))))
+           (inst ,move-insn dst arg))))))
 
 ;; Unary operations
 
@@ -262,7 +295,11 @@ May emit additional instructions using the temporary register."
 (define-vop (sse-unary-to-uint-op sse-unary-base-op)
   (:results (r :scs (unsigned-reg))))
 
-(defmacro def-unary-intrinsic (&whole whole name rtype insn cost c-name &key partial immediate-arg result-size arg-type)
+(defmacro def-unary-intrinsic (&whole whole
+                               name rtype insn cost c-name
+                               &key
+                               partial ; instruction modifies only part of the destination
+                               immediate-arg result-size arg-type)
   (declare (ignore c-name arg-type))
   (let* ((imm (if immediate-arg '(imm)))
          (immt (if immediate-arg (list immediate-arg))))
@@ -271,6 +308,7 @@ May emit additional instructions using the temporary register."
        (export ',name)
        (save-intrinsic-spec ,name ,whole)
        (defknown ,name (sse-pack ,@immt) ,rtype (foldable flushable))
+       ;;
        (define-vop (,name ,(cond ((subtypep rtype 'unsigned-byte)
                                   'sse-unary-to-uint-op)
                                  ((subtypep rtype 'integer)
@@ -303,6 +341,7 @@ May emit additional instructions using the temporary register."
      (export ',name)
      (save-intrinsic-spec ,name (def-unary-intrinsic ,name ,rtype ,insn ,cost ,c-name))
      (defknown ,name (sse-pack) (signed-byte 32) (foldable flushable))
+     ;;
      (define-vop (,name sse-cvt-to-int32-op)
        (:translate ,name)
        (:result-types ,(type-name-to-primitive rtype))
@@ -321,6 +360,7 @@ May emit additional instructions using the temporary register."
      (export ',name)
      (save-intrinsic-spec ,name (def-unary-intrinsic ,name ,rtype ,insn 3 nil))
      (defknown ,name (sse-pack) ,rtype (foldable flushable))
+     ;;
      (define-vop (,name sse-not-op)
        (:translate ,name)
        (:result-types ,(type-name-to-primitive rtype))
@@ -352,7 +392,9 @@ May emit additional instructions using the temporary register."
   (:args (x :scs (sse-reg sse-pack-immediate) :target r)
          (y :scs (sse-reg sse-pack-immediate) :target r)))
 
-(defmacro def-binary-intrinsic (&whole whole name rtype insn cost c-name &key commutative tags immediate-arg x-type y-type)
+(defmacro def-binary-intrinsic (&whole whole
+                                name rtype insn cost c-name
+                                &key commutative tags immediate-arg x-type y-type)
   (declare (ignore c-name x-type y-type))
   (let* ((imm (if immediate-arg '(imm)))
          (immt (if immediate-arg (list immediate-arg))))
@@ -360,6 +402,7 @@ May emit additional instructions using the temporary register."
        (export ',name)
        (save-intrinsic-spec ,name ,whole)
        (defknown ,name (sse-pack sse-pack ,@immt) ,rtype (foldable flushable))
+       ;;
        (define-vop (,name ,(if commutative 'sse-binary-comm-op 'sse-binary-op))
          (:translate ,name)
          (:result-types ,(type-name-to-primitive rtype))
@@ -372,6 +415,7 @@ May emit additional instructions using the temporary register."
                      (rotatef x y))
                    (ensure-load ,rtype r x)
                    (inst ,insn ,@tags r (ensure-reg-or-mem y) ,@imm))
+                 ;; Noncommutative may require usage of a temporary:
                  `((unless (location= y r)
                      (setf tmp r))
                    (ensure-load ,rtype tmp x)
@@ -397,7 +441,9 @@ May emit additional instructions using the temporary register."
          (iv :scs (unsigned-reg unsigned-stack immediate)))
   (:arg-types sse-pack unsigned-num))
 
-(defmacro def-sse-int-intrinsic (&whole whole name itype rtype insn cost c-name &key make-temporary immediate-arg defun-body)
+(defmacro def-sse-int-intrinsic (&whole whole
+                                 name itype rtype insn cost c-name
+                                 &key make-temporary immediate-arg defun-body)
   (declare (ignore c-name defun-body))
   (let* ((imm (if immediate-arg '(imm)))
          (immt (if immediate-arg (list immediate-arg)))
@@ -406,6 +452,7 @@ May emit additional instructions using the temporary register."
        (export ',name)
        (save-intrinsic-spec ,name ,whole)
        (defknown ,name (sse-pack ,itype ,@immt) ,rtype (foldable flushable))
+       ;;
        (define-vop (,name ,(if unsigned? 'sse-uint-op 'sse-int-op))
          (:translate ,name)
          (:result-types ,(type-name-to-primitive rtype))
@@ -528,6 +575,7 @@ May emit additional instructions using the temporary register."
        (save-intrinsic-spec ,name ,whole)
        (defknown ,vop (,@valtype system-area-pointer signed-word fixnum signed-word)
            ,(or rtype '(values)) (flushable always-translatable))
+       ;;
        (define-vop (,vop ,(if register-arg 'sse-xmm-load-op 'sse-load-op))
          (:translate ,vop)
          ,rtypes
@@ -540,13 +588,16 @@ May emit additional instructions using the temporary register."
          (:generator 4
            ,(if register-arg `(ensure-load ,rtype r value))
            (inst ,insn ,@tags ,@r-arg (make-scaled-ea ,size sap index scale offset tmp :fixnum-index t))))
+       ;;
        (%deftransform ',vop '(function * *)
                       #',(if register-arg 'fold-xmm-ref-index-addressing 'fold-ref-index-addressing)
                       "fold semi-constant offset expressions")
+       ;; If the operation doesn't have a separate XMM argument:
        ,@(if (null register-arg)
-             `(;; Vector indexing version
+             `(;; Lisp vector indexing version
                (defknown ,ix-vop (simple-array signed-word fixnum signed-word) ,(or rtype '(values))
                    (flushable always-translatable))
+               ;;
                (define-vop (,ix-vop sse-load-ix-op)
                  (:translate ,ix-vop)
                  ,rtypes
@@ -557,6 +608,7 @@ May emit additional instructions using the temporary register."
                  ,rtypes
                  (:generator 3
                    (inst ,insn ,@tags ,@r-arg (make-scaled-ea ,size sap index scale offset tmp :fixnum-index t))))
+               ;;
                (%deftransform ',ix-vop '(function * *) #'fold-ref-index-addressing
                               "fold semi-constant index expressions"))))))
 
@@ -605,6 +657,7 @@ May emit additional instructions using the temporary register."
        (save-intrinsic-spec ,name ,whole)
        (defknown ,vop (system-area-pointer signed-word fixnum signed-word sse-pack) (values)
            (unsafe always-translatable))
+       ;;
        (define-vop (,vop sse-store-op)
          (:translate ,vop)
          (:generator 5
@@ -613,11 +666,14 @@ May emit additional instructions using the temporary register."
          (:translate ,vop)
          (:generator 4
            (inst ,insn (make-scaled-ea :qword sap index scale offset tmp :fixnum-index t) value)))
+       ;;
        (%deftransform ',vop '(function * *) #'fold-set-index-addressing
                       "fold semi-constant offset expressions")
-       ;; Vector indexing version
+       ;;
+       ;; Lisp vector indexing version
        (defknown ,ix-vop (simple-array signed-word fixnum signed-word sse-pack) (values)
            (unsafe always-translatable))
+       ;;
        (define-vop (,ix-vop sse-store-ix-op)
          (:translate ,ix-vop)
          (:generator 4
@@ -626,6 +682,7 @@ May emit additional instructions using the temporary register."
          (:translate ,ix-vop)
          (:generator 3
            (inst ,insn (make-scaled-ea :qword sap index scale offset tmp :fixnum-index t) value)))
+       ;;
        (%deftransform ',ix-vop '(function * *) #'fold-set-index-addressing
                       "fold semi-constant index expressions"))))
 
