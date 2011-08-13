@@ -31,8 +31,10 @@
 
 (defun ensure-reg-or-mem (tn)
   (sc-case tn
-    ((sse-pack-immediate immediate)
+    ((sse-pack-immediate)
      (register-inline-constant (tn-value tn)))
+    ((immediate)
+     (register-inline-constant :dword (tn-value tn)))
     (t tn)))
 
 (defmacro ensure-load (type tgt src)
@@ -166,7 +168,7 @@ May emit additional instructions using the temporary register."
           (if (typep value '(signed-byte 32))
               (make-ea size :base sap :disp value)
               (progn
-                (inst mov tmp (register-inline-constant value))
+                (inst mov tmp (register-inline-constant :qword value))
                 (make-ea size :base sap :index tmp))))
         ;; Indexing
         (progn
@@ -218,7 +220,7 @@ May emit additional instructions using the temporary register."
                          (multiple-value-setq (roffset loffset) (floor offset lscale))
                          (if (typep roffset '(signed-byte 32))
                              (inst add tmp roffset)
-                             (inst add tmp (register-inline-constant roffset))))))
+                             (inst add tmp (register-inline-constant :qword roffset))))))
                     (make-ea size :base sap :index tmp :scale lscale :disp loffset)))))))))
 
 ;; Initialization
