@@ -26,18 +26,21 @@
                 (declaim (ftype (function (real) ,rtype) ,pubname)
                          (inline ,pubname))
                 (defun ,pubname (arg) (,fname (coerce arg ',atype)))))
+           ;;
            (def-unary-intrinsic (name rtype insn cost c-name &key immediate-arg &allow-other-keys)
              (declare (ignore insn cost c-name))
              (unless immediate-arg
                `(defun ,name (x)
                   (declare (type sse-pack x))
                   (truly-the ,rtype (%primitive ,name x)))))
+           ;;
            (def-binary-intrinsic (name rtype insn cost c-name &key immediate-arg &allow-other-keys)
              (declare (ignore insn cost c-name))
              (unless immediate-arg
                `(defun ,name (x y ,@(if immediate-arg '(imm)))
                   (declare (type sse-pack x y))
                   (truly-the ,rtype (%primitive ,name x y)))))
+           ;;
            (def-sse-int-intrinsic (name itype rtype insn cost c-name &key immediate-arg &allow-other-keys)
              (declare (ignore insn cost c-name))
              (unless immediate-arg
@@ -45,11 +48,13 @@
                   (declare (type sse-pack x)
                            (type ,itype iv))
                   (truly-the ,rtype (%primitive ,name x iv)))))
+           ;;
            (def-comparison-intrinsic (name arg-type insn cost c-name &key &allow-other-keys)
              (declare (ignore insn cost c-name arg-type))
              `(defun ,name (x y)
                 (declare (type sse-pack x y))
                 (truly-the boolean (,name x y))))
+           ;;
            (def-load-intrinsic (name rtype insn c-name &key register-arg &allow-other-keys)
              (declare (ignore insn c-name))
              (let* ((vop (symbolicate "%" name))
@@ -63,6 +68,7 @@
                     ,(if rtype
                          `(truly-the ,rtype (,vop ,@valarg pointer offset 1 0))
                          `(,vop ,@valarg pointer offset 1 0))))))
+           ;;
            (def-store-intrinsic (name rtype insn c-name &key setf-name &allow-other-keys)
              (declare (ignore insn c-name))
              (let* ((vop (symbolicate "%" name)))
@@ -83,7 +89,9 @@
        collect it into specs
        finally (return `(progn ,@specs))))
 
-;;; Helper functions and macros
+#|---------------------------------|
+ |    HELPER FUNCTIONS & MACROS    |
+ |---------------------------------|#
 
 (defmacro def-utility (name args rtype &body code)
   `(progn
@@ -137,7 +145,9 @@
           collect `(def-splice-transform ,not-fun ((,a arg1 arg2)) (,b arg1 arg2))
           collect `(def-splice-transform ,not-fun ((,b arg1 arg2)) (,a arg1 arg2)))))
 
-;;; CPU control
+#|---------------------------------|
+ |           CPU CONTROL           |
+ |---------------------------------|#
 
 (defun cpu-mxcsr ()
   (cpu-mxcsr))
@@ -154,7 +164,9 @@
 
 (defun cpu-pause () (cpu-pause))
 
-;;; Single-float
+#|---------------------------------|
+ |       SINGLE-FLOAT SUPPORT      |
+ |---------------------------------|#
 
 ;; Constants
 
@@ -236,7 +248,9 @@
          (yval (%sse-pack-to-int y)))
     (truly-the float-sse-pack (%int-to-sse-pack (%shuffle-subints xval yval imm 32)))))
 
-;;; Double-float
+#|---------------------------------|
+ |       DOUBLE-FLOAT SUPPORT      |
+ |---------------------------------|#
 
 ;; Constants
 
@@ -298,7 +312,9 @@
              (%make-sse-pack (if (logtest imm 1) (%sse-pack-high x) (%sse-pack-low x))
                              (if (logtest imm 2) (%sse-pack-high y) (%sse-pack-low y)))))
 
-;;; Integer
+#|---------------------------------|
+ |         INTEGER SUPPORT         |
+ |---------------------------------|#
 
 ;; Constants
 

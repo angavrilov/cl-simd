@@ -8,13 +8,17 @@
 
 (in-package #:SSE)
 
-;;; The specific pack types
+#|---------------------------------|
+ |       SPECIFIC PACK TYPES       |
+ |---------------------------------|#
 
 (deftype int-sse-pack () '(sse-pack integer))
 (deftype float-sse-pack () '(sse-pack single-float))
 (deftype double-sse-pack () '(sse-pack double-float))
 
-;;; Helper functions
+#|---------------------------------|
+ |    HELPER FUNCTIONS & MACROS    |
+ |---------------------------------|#
 
 (defconstant +uint32-mask+ #xFFFFFFFF)
 (defconstant +uint64-mask+ #xFFFFFFFFFFFFFFFF)
@@ -65,7 +69,9 @@
             collect `(splice-fun-args ,name ',(first spec) ,(1- (length spec))))
        (list* 'lambda ',flat-args ',code))))
 
-;;; Index-offset splicing
+#|---------------------------------|
+ |     INDEX-OFFSET SPLICING       |
+ |---------------------------------|#
 
 (defun skip-casts (lvar)
   ;; In unchecked mode, skip cast nodes and return their argument
@@ -128,7 +134,9 @@
 (deftransform fold-set-index-addressing ((thing index scale offset value) * * :defun-only t :node node)
   (fold-index-addressing (lvar-fun-name (basic-combination-fun node)) index scale offset :postfix-args '(value)))
 
-;;; Index-offset addressing
+#|---------------------------------|
+ |     INDEX-OFFSET ADDRESSING     |
+ |---------------------------------|#
 
 (defun is-tagged-load-scale (value)
   ;; The scale factor can be adjusted for a tagged fixnum index
@@ -159,6 +167,7 @@
             (+ offset (* count ostep)))))
 
 (defun split-offset (offset scale)
+  ;; Optimally split the offset into a scaled and unscaled part
   (if (typep offset '(signed-byte 32))
       (values 0 offset)
       (multiple-value-bind (div rem) (floor offset scale)
@@ -191,7 +200,7 @@ May emit additional instructions using the temporary register."
               (progn
                 (inst mov tmp (register-inline-constant :qword value))
                 (make-ea size :base sap :index tmp))))
-        ;; Indexing required
+        ;; Otherwise, indexing required
         (progn
           ;; If the index is tagged, adjust the scale factor:
           (when (sc-is index any-reg)
@@ -255,7 +264,9 @@ May emit additional instructions using the temporary register."
                     ;; Return the final EA definition:
                     (make-ea size :base sap :index tmp :scale outer-scale :disp outer-offset)))))))))
 
-;; Initialization
+#|---------------------------------|
+ |    INITIALIZATION INTRINSICS    |
+ |---------------------------------|#
 
 (defmacro def-float-set-intrinsic (&whole whole pubname fname atype aregtype rtype move-insn)
   (declare (ignore pubname))
@@ -274,7 +285,9 @@ May emit additional instructions using the temporary register."
          (unless (location= dst arg)
            (inst ,move-insn dst arg))))))
 
-;; Unary operations
+#|---------------------------------|
+ |   UNARY OPERATION INTRINSICS    |
+ |---------------------------------|#
 
 (define-vop (sse-unary-base-op)
   ;; no immediate because expecting to be folded
@@ -329,7 +342,9 @@ May emit additional instructions using the temporary register."
                                       ,(if result-size `(reg-in-size r ,result-size) 'r)
                                       x ,@imm)))))))))
 
-;; Unary to int32 & sign-extend
+#|---------------------------------|
+ |  UNARY TO INT32 & SIGN-EXTEND   |
+ |---------------------------------|#
 
 (define-vop (sse-cvt-to-int32-op sse-unary-base-op)
   (:temporary (:sc signed-reg :offset rax-offset :target r :to :result) rax)
@@ -350,7 +365,9 @@ May emit additional instructions using the temporary register."
          (inst cdqe)
          (move r rax)))))
 
-;; NOT intrinsics
+#|---------------------------------|
+ |     BITWISE NOT INTRINSICS      |
+ |---------------------------------|#
 
 (define-vop (sse-not-op sse-unary-op)
   (:temporary (:sc sse-reg) tmp))
@@ -373,7 +390,9 @@ May emit additional instructions using the temporary register."
                (inst pcmpeqd r r)
                (inst ,insn r x)))))))
 
-;; Binary operations
+#|---------------------------------|
+ |   BINARY OPERATION INTRINSICS   |
+ |---------------------------------|#
 
 (define-vop (sse-binary-base-op)
   (:args (x :scs (sse-reg sse-pack-immediate) :target r)
@@ -422,7 +441,9 @@ May emit additional instructions using the temporary register."
                    (inst ,insn ,@tags tmp (ensure-reg-or-mem y) ,@imm)
                    (ensure-move ,rtype r tmp))))))))
 
-;;; XMM/Integer combination intrinsics
+#|---------------------------------|
+ |  XMM/INTEGER BINARY INTRINSICS  |
+ |---------------------------------|#
 
 (define-vop (sse-int-base-op)
   (:results (r :scs (sse-reg)))
@@ -470,7 +491,9 @@ May emit additional instructions using the temporary register."
                  make-temporary)
            (inst ,insn r ,(if make-temporary 'tmp '(ensure-reg-or-mem iv)) ,@imm))))))
 
-;;; Comparison predicate intrinsics
+#|---------------------------------|
+ | COMPARISON PREDICATE INTRINSICS |
+ |---------------------------------|#
 
 (define-vop (sse-comparison-op)
   (:args (x :scs (sse-reg))
@@ -487,7 +510,9 @@ May emit additional instructions using the temporary register."
                                (sc-is y sse-reg))))
          (y :scs (sse-reg sse-pack-immediate))))
 
-(defmacro def-comparison-intrinsic (&whole whole name arg-type insn cost c-name &key commutative tags)
+(defmacro def-comparison-intrinsic (&whole whole
+                                    name arg-type insn cost c-name
+                                    &key commutative tags)
   (declare (ignore arg-type c-name))
   (let* ()
     `(progn
@@ -504,7 +529,9 @@ May emit additional instructions using the temporary register."
                      (inst ,insn y x))
                 `(inst ,insn x y)))))))
 
-;;; Memory intrinsics
+#|---------------------------------|
+ |     MEMORY LOAD INTRINSICS      |
+ |---------------------------------|#
 
 (define-vop (sse-load-base-op)
   (:results (r :scs (sse-reg)))
@@ -548,18 +575,21 @@ May emit additional instructions using the temporary register."
 (define-vop (sse-load-ix-op sse-load-base-op)
   (:args (sap :scs (descriptor-reg) :to :eval)
          (index :scs (signed-reg immediate) :target tmp))
-  (:arg-types * signed-num (:constant fixnum) (:constant signed-word))
+  (:arg-types * signed-num
+              (:constant fixnum) (:constant signed-word))
   (:temporary (:sc signed-reg :from (:argument 1)) tmp)
   (:info scale offset))
 
 (define-vop (sse-load-ix-op/tag sse-load-base-op)
   (:args (sap :scs (descriptor-reg) :to :eval)
          (index :scs (any-reg signed-reg immediate) :target tmp))
-  (:arg-types * tagged-num (:constant tagged-load-scale) (:constant signed-word))
+  (:arg-types * tagged-num
+              (:constant tagged-load-scale) (:constant signed-word))
   (:temporary (:sc any-reg :from (:argument 1)) tmp)
   (:info scale offset))
 
-(defmacro def-load-intrinsic (&whole whole name rtype insn c-name
+(defmacro def-load-intrinsic (&whole whole
+                              name rtype insn c-name
                               &key register-arg tags postfix-fmt (size :qword))
   (declare (ignore c-name postfix-fmt))
   (let* ((vop (symbolicate "%" name))
@@ -612,6 +642,10 @@ May emit additional instructions using the temporary register."
                (%deftransform ',ix-vop '(function * *) #'fold-ref-index-addressing
                               "fold semi-constant index expressions"))))))
 
+#|---------------------------------|
+ |     MEMORY STORE INTRINSICS     |
+ |---------------------------------|#
+
 (define-vop (sse-store-base-op)
   (:policy :fast-safe)
   (:note "inline SSE store operation"))
@@ -620,7 +654,8 @@ May emit additional instructions using the temporary register."
   (:args (sap :scs (sap-reg) :to :eval)
          (index :scs (signed-reg immediate) :target tmp)
          (value :scs (sse-reg)))
-  (:arg-types system-area-pointer signed-num (:constant fixnum) (:constant signed-word) sse-pack)
+  (:arg-types system-area-pointer signed-num
+              (:constant fixnum) (:constant signed-word) sse-pack)
   (:temporary (:sc signed-reg :from (:argument 1)) tmp)
   (:info scale offset))
 
@@ -628,7 +663,8 @@ May emit additional instructions using the temporary register."
   (:args (sap :scs (sap-reg) :to :eval)
          (index :scs (any-reg signed-reg immediate) :target tmp)
          (value :scs (sse-reg)))
-  (:arg-types system-area-pointer tagged-num (:constant tagged-load-scale) (:constant signed-word) sse-pack)
+  (:arg-types system-area-pointer tagged-num
+              (:constant tagged-load-scale) (:constant signed-word) sse-pack)
   (:temporary (:sc any-reg :from (:argument 1)) tmp)
   (:info scale offset))
 
@@ -636,7 +672,8 @@ May emit additional instructions using the temporary register."
   (:args (sap :scs (descriptor-reg) :to :eval)
          (index :scs (signed-reg immediate) :target tmp)
          (value :scs (sse-reg)))
-  (:arg-types * signed-num (:constant fixnum) (:constant signed-word) sse-pack)
+  (:arg-types * signed-num
+              (:constant fixnum) (:constant signed-word) sse-pack)
   (:temporary (:sc signed-reg :from (:argument 1)) tmp)
   (:info scale offset))
 
@@ -644,11 +681,14 @@ May emit additional instructions using the temporary register."
   (:args (sap :scs (descriptor-reg) :to :eval)
          (index :scs (any-reg signed-reg immediate) :target tmp)
          (value :scs (sse-reg)))
-  (:arg-types * tagged-num (:constant tagged-load-scale) (:constant signed-word) sse-pack)
+  (:arg-types * tagged-num
+              (:constant tagged-load-scale) (:constant signed-word) sse-pack)
   (:temporary (:sc any-reg :from (:argument 1)) tmp)
   (:info scale offset))
 
-(defmacro def-store-intrinsic (&whole whole name rtype insn c-name &key setf-name)
+(defmacro def-store-intrinsic (&whole whole
+                               name rtype insn c-name
+                               &key setf-name)
   (declare (ignore rtype c-name))
   (let* ((vop (symbolicate "%" name))
          (ix-vop (symbolicate vop "/IX")))

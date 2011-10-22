@@ -8,7 +8,9 @@
 
 (in-package #:SSE)
 
-;; SSE array element size calculation
+#|--------------------------------------|
+ |  SSE ARRAY ELEMENT SIZE CALCULATION  |
+ |--------------------------------------|#
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun sse-elt-shift-from-saetp (info)
@@ -32,8 +34,7 @@
          (ftype (function (t) (integer 0 4)) sse-elt-shift-of))
 
 (defun sse-elt-shift-of (obj)
-  "Returns the SSE element size shift for the given object,
-or fails if it is not a valid SSE vector."
+  "Returns the SSE element size shift for the given object, or fails if it is not a valid SSE vector."
   (declare (optimize (safety 0)))
   (the (integer 0 4)
     (or (svref %%size-shift-table%%
@@ -44,7 +45,9 @@ or fails if it is not a valid SSE vector."
                :datum obj
                :expected-type 'sse-array))))
 
-;;; Type and allocation
+#|--------------------------------------|
+ |     SSE-ARRAY TYPE AND ALLOCATION    |
+ |--------------------------------------|#
 
 (deftype sse-array (&optional (elt-type '* et-p) dims)
   "Type of arrays efficiently accessed by SSE aref intrinsics and returned by make-sse-array.
@@ -94,7 +97,9 @@ Should be assumed to be SIMPLE-ARRAY, except that displacing with MAKE-SSE-ARRAY
         (apply #'make-array dimensions :element-type upgraded
                (if ie-p (list :initial-element initial-element))))))
 
-;;; AREF intrinsic definition helpers
+#|--------------------------------------|
+ |  AREF INTRINSIC DEFINITION HELPERS   |
+ |--------------------------------------|#
 
 (defconstant +vector-data-fixup+
   (- (* vector-data-offset n-word-bytes) other-pointer-lowtag)
@@ -112,6 +117,8 @@ Should be assumed to be SIMPLE-ARRAY, except that displacing with MAKE-SSE-ARRAY
 ;; Depends on the vector-length field being in the same place
 ;; as the array fill pointer, which for simple-array is equal
 ;; to the total size.
+;; The integer constant argument is the number of elements that
+;; should be deducted from the size to account for SIMD access.
 (defknown %sse-array-size (simple-array fixnum) array-total-size (flushable always-translatable))
 
 (define-vop (%sse-array-size/0)
@@ -195,7 +202,7 @@ Should be assumed to be SIMPLE-ARRAY, except that displacing with MAKE-SSE-ARRAY
   (multiple-value-bind (shift dim-info)
       (sse-array-type-info-or-give-up (lvar-type lvar))
     (values (ash 1 shift)                 ; step
-            (ash (1- ref-size) (- shift)) ; gap
+            (ash (1- ref-size) (- shift)) ; gap (size of SIMD overreach)
             dim-info)))
 
 (defmacro def-aref-intrinsic (postfix rtype reader writer &key (ref-size 16))
@@ -223,7 +230,8 @@ Should be assumed to be SIMPLE-ARRAY, except that displacing with MAKE-SSE-ARRAY
        ;;
        (deftransform ,rm-aref ((array index) (simple-array t) * :important t)
          ,(format nil "open-code ~A" rm-aref)
-         (multiple-value-bind (step gap is-vector) (sse-array-info-or-give-up array ,ref-size)
+         (multiple-value-bind (step gap is-vector)
+             (sse-array-info-or-give-up array ,ref-size)
            (declare (ignorable gap))
            `(,',reader/ix-vop (array-data-expr array ,is-vector)
                               ,,index-expression
@@ -242,7 +250,8 @@ Should be assumed to be SIMPLE-ARRAY, except that displacing with MAKE-SSE-ARRAY
          (values-specifier-type ',rtype))
        (deftransform ,aref ((array &rest indices) (simple-array &rest t) * :important t)
          ,(format nil "open-code ~A" aref)
-         (multiple-value-bind (step gap is-vector) (sse-array-info-or-give-up array ,ref-size)
+         (multiple-value-bind (step gap is-vector)
+             (sse-array-info-or-give-up array ,ref-size)
            (declare (ignorable gap))
            (let ((syms (make-gensym-list (length indices))))
              `(lambda (array ,@syms)
@@ -263,7 +272,8 @@ Should be assumed to be SIMPLE-ARRAY, except that displacing with MAKE-SSE-ARRAY
                ;;
                (deftransform ,rm-aset ((array index value) (simple-array t t) * :important t)
                  ,(format nil "open-code ~A" rm-aset)
-                 (multiple-value-bind (step gap is-vector) (sse-array-info-or-give-up array ,ref-size)
+                 (multiple-value-bind (step gap is-vector)
+                     (sse-array-info-or-give-up array ,ref-size)
                    (declare (ignorable gap))
                    `(progn
                       (,',writer/ix-vop (array-data-expr array ,is-vector)
@@ -288,7 +298,8 @@ Should be assumed to be SIMPLE-ARRAY, except that displacing with MAKE-SSE-ARRAY
                  (specifier-type ',rtype))
                (deftransform ,aset ((array &rest stuff) (simple-array &rest t) * :important t)
                  ,(format nil "open-code ~A" aset)
-                 (multiple-value-bind (step gap is-vector) (sse-array-info-or-give-up array ,ref-size)
+                 (multiple-value-bind (step gap is-vector)
+                     (sse-array-info-or-give-up array ,ref-size)
                    (declare (ignorable gap))
                    (let ((syms (make-gensym-list (length stuff))))
                      `(lambda (array ,@syms)

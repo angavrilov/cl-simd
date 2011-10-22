@@ -18,6 +18,10 @@
   ;; Work around by loading the macro definition file into the interpreter:
   (load (merge-pathnames #P"ecl-sse-core.lisp" *compile-file-truename*)))
 
+#|---------------------------------|
+ |   MISC INTRINSICS DEFINITIONS   |
+ |---------------------------------|#
+
 ;;; Prefetch
 
 (def-load-intrinsic cpu-prefetch-t0 nil prefetch "_mm_prefetch" :tags (:t0) :size :byte :postfix-fmt ",_MM_HINT_T0")
@@ -98,7 +102,9 @@
 
   (def-intrinsic cpu-pause () nil "_mm_pause"))
 
-;;; Single-float
+#|-----------------------------------------|
+ |   SINGLE-FLOAT INTRINSICS DEFINITIONS   |
+ |-----------------------------------------|#
 
 ;; Initialization
 
@@ -247,7 +253,9 @@
 (def-unary-intrinsic truncate-ss-to-si64 (signed-byte 64) cvttss2si 3
                      #-msvc "_mm_cvttss_si64" #+msvc "_mm_cvttss_si64x" :arg-type float-sse-pack)
 
-;;; Double-float
+#|-----------------------------------------|
+ |   DOUBLE-FLOAT INTRINSICS DEFINITIONS   |
+ |-----------------------------------------|#
 
 ;; Initialization
 
@@ -401,7 +409,9 @@
 (def-unary-intrinsic truncate-sd-to-si64 (signed-byte 64) cvttsd2si 3
                      #-msvc "_mm_cvttsd_si64" #+msvc "_mm_cvttsd_si64x" :arg-type double-sse-pack)
 
-;;; Integer
+#|-----------------------------------------|
+ |      INTEGER INTRINSICS DEFINITIONS     |
+ |-----------------------------------------|#
 
 ;; Initialization
 
