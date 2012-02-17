@@ -119,7 +119,7 @@ Should be assumed to be SIMPLE-ARRAY, except that displacing with MAKE-SSE-ARRAY
 ;; to the total size.
 ;; The integer constant argument is the number of elements that
 ;; should be deducted from the size to account for SIMD access.
-(defknown %sse-array-size (simple-array fixnum) array-total-size (flushable always-translatable))
+(defknown %sse-array-size (simple-array fixnum) array-total-size (flushable always-translatable dx-safe))
 
 (define-vop (%sse-array-size/0)
   (:translate %sse-array-size)
@@ -222,7 +222,7 @@ Should be assumed to be SIMPLE-ARRAY, except that displacing with MAKE-SSE-ARRAY
     `(progn
        ;; ROW-MAJOR-AREF
        (export ',rm-aref)
-       (defknown ,rm-aref (array index) ,rtype (foldable flushable))
+       (defknown ,rm-aref (array index) ,rtype (foldable flushable dx-safe))
        (defun ,rm-aref (array index)
          (with-sse-data ((sap data array)
                          (offset index))
@@ -238,7 +238,7 @@ Should be assumed to be SIMPLE-ARRAY, except that displacing with MAKE-SSE-ARRAY
                               ,step ,+vector-data-fixup+)))
        ;; AREF
        (export ',aref)
-       (defknown ,aref (array &rest index) ,rtype (foldable flushable))
+       (defknown ,aref (array &rest index) ,rtype (foldable flushable dx-safe))
        (defun ,aref (array &rest indices)
          (declare (truly-dynamic-extent indices))
          (with-sse-data ((sap data array)
@@ -262,7 +262,7 @@ Should be assumed to be SIMPLE-ARRAY, except that displacing with MAKE-SSE-ARRAY
                                     ,step ,+vector-data-fixup+))))))
        ,@(if writer
              `(;; ROW-MAJOR-ASET
-               (defknown ,rm-aset (array index sse-pack) ,rtype (unsafe))
+               (defknown ,rm-aset (array index sse-pack) ,rtype ())
                (defsetf ,rm-aref ,rm-aset)
                (defun ,rm-aset (array index new-value)
                  (with-sse-data ((sap data array)
@@ -282,7 +282,7 @@ Should be assumed to be SIMPLE-ARRAY, except that displacing with MAKE-SSE-ARRAY
                                         (the sse-pack value))
                       value)))
                ;; %ASET
-               (defknown ,aset (array &rest t) ,rtype (unsafe))
+               (defknown ,aset (array &rest t) ,rtype ())
                (defsetf ,aref ,aset)
                (defun ,aset (array &rest stuff)
                  (let ((new-value (car (last stuff))))

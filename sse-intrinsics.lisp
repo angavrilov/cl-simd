@@ -50,7 +50,7 @@
         (inst stmxcsr ea)
         (inst mov (reg-in-size result :dword) ea))))
 
-  (defknown %set-cpu-mxcsr ((unsigned-byte 32)) (unsigned-byte 32) (unsafe))
+  (defknown %set-cpu-mxcsr ((unsigned-byte 32)) (unsigned-byte 32) ())
 
   (define-vop (%set-cpu-mxcsr)
     (:translate %set-cpu-mxcsr)
@@ -481,7 +481,7 @@
 
 #+sbcl
 (progn
-  (defknown %maskmoveu-pi (sse-pack sse-pack system-area-pointer fixnum) (values) (unsafe))
+  (defknown %maskmoveu-pi (sse-pack sse-pack system-area-pointer fixnum) (values) ())
 
   (define-vop (%maskmoveu-pi)
     (:translate %maskmoveu-pi)
@@ -686,15 +686,15 @@
 #+sbcl
 (progn
   (export 'convert-si32-to-pi)
-  (defknown convert-si32-to-pi ((signed-byte 32)) int-sse-pack (foldable flushable))
+  (defknown convert-si32-to-pi ((signed-byte 32)) int-sse-pack (foldable flushable dx-safe))
   (export 'convert-su32-to-pi)
-  (defknown convert-su32-to-pi ((unsigned-byte 32)) int-sse-pack (foldable flushable))
+  (defknown convert-su32-to-pi ((unsigned-byte 32)) int-sse-pack (foldable flushable dx-safe))
   (export 'convert-si64-to-pi)
-  (defknown convert-si64-to-pi ((signed-byte 64)) int-sse-pack (foldable flushable))
+  (defknown convert-si64-to-pi ((signed-byte 64)) int-sse-pack (foldable flushable dx-safe))
   (export 'convert-su64-to-pi)
-  (defknown convert-su64-to-pi ((unsigned-byte 64)) int-sse-pack (foldable flushable))
-  (defknown %set-int ((signed-byte 64)) int-sse-pack (foldable flushable always-translatable))
-  (defknown %set-uint ((unsigned-byte 64)) int-sse-pack (foldable flushable always-translatable))
+  (defknown convert-su64-to-pi ((unsigned-byte 64)) int-sse-pack (foldable flushable dx-safe))
+  (defknown %set-int ((signed-byte 64)) int-sse-pack (foldable flushable always-translatable dx-safe))
+  (defknown %set-uint ((unsigned-byte 64)) int-sse-pack (foldable flushable always-translatable dx-safe))
 
   (define-vop (%set-int)
     (:translate %set-int %set-uint

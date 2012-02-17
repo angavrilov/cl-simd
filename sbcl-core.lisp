@@ -272,7 +272,7 @@ May emit additional instructions using the temporary register."
   (declare (ignore pubname))
   `(progn
      (save-intrinsic-spec ,fname ,whole)
-     (defknown ,fname (,atype) ,rtype (foldable flushable))
+     (defknown ,fname (,atype) ,rtype (foldable flushable dx-safe))
      ;;
      (define-vop (,fname)
        (:translate ,fname)
@@ -320,7 +320,7 @@ May emit additional instructions using the temporary register."
     `(progn
        (export ',name)
        (save-intrinsic-spec ,name ,whole)
-       (defknown ,name (sse-pack ,@immt) ,rtype (foldable flushable))
+       (defknown ,name (sse-pack ,@immt) ,rtype (foldable flushable dx-safe))
        ;;
        (define-vop (,name ,(cond ((subtypep rtype 'unsigned-byte)
                                   'sse-unary-to-uint-op)
@@ -355,7 +355,7 @@ May emit additional instructions using the temporary register."
   `(progn
      (export ',name)
      (save-intrinsic-spec ,name (def-unary-intrinsic ,name ,rtype ,insn ,cost ,c-name))
-     (defknown ,name (sse-pack) (signed-byte 32) (foldable flushable))
+     (defknown ,name (sse-pack) (signed-byte 32) (foldable flushable dx-safe))
      ;;
      (define-vop (,name sse-cvt-to-int32-op)
        (:translate ,name)
@@ -376,7 +376,7 @@ May emit additional instructions using the temporary register."
   `(progn
      (export ',name)
      (save-intrinsic-spec ,name (def-unary-intrinsic ,name ,rtype ,insn 3 nil))
-     (defknown ,name (sse-pack) ,rtype (foldable flushable))
+     (defknown ,name (sse-pack) ,rtype (foldable flushable dx-safe))
      ;;
      (define-vop (,name sse-not-op)
        (:translate ,name)
@@ -420,7 +420,7 @@ May emit additional instructions using the temporary register."
     `(progn
        (export ',name)
        (save-intrinsic-spec ,name ,whole)
-       (defknown ,name (sse-pack sse-pack ,@immt) ,rtype (foldable flushable))
+       (defknown ,name (sse-pack sse-pack ,@immt) ,rtype (foldable flushable dx-safe))
        ;;
        (define-vop (,name ,(if commutative 'sse-binary-comm-op 'sse-binary-op))
          (:translate ,name)
@@ -472,7 +472,7 @@ May emit additional instructions using the temporary register."
     `(progn
        (export ',name)
        (save-intrinsic-spec ,name ,whole)
-       (defknown ,name (sse-pack ,itype ,@immt) ,rtype (foldable flushable))
+       (defknown ,name (sse-pack ,itype ,@immt) ,rtype (foldable flushable dx-safe))
        ;;
        (define-vop (,name ,(if unsigned? 'sse-uint-op 'sse-int-op))
          (:translate ,name)
@@ -518,7 +518,7 @@ May emit additional instructions using the temporary register."
     `(progn
        (export ',name)
        (save-intrinsic-spec ,name ,whole)
-       (defknown ,name (sse-pack sse-pack) boolean (foldable flushable))
+       (defknown ,name (sse-pack sse-pack) boolean (foldable flushable dx-safe))
        (define-vop (,name ,(if commutative 'sse-comparison-comm-op 'sse-comparison-op))
          (:translate ,name)
          (:conditional ,@tags)
@@ -604,7 +604,7 @@ May emit additional instructions using the temporary register."
        (export ',name)
        (save-intrinsic-spec ,name ,whole)
        (defknown ,vop (,@valtype system-area-pointer signed-word fixnum signed-word)
-           ,(or rtype '(values)) (flushable always-translatable))
+           ,(or rtype '(values)) (flushable always-translatable dx-safe))
        ;;
        (define-vop (,vop ,(if register-arg 'sse-xmm-load-op 'sse-load-op))
          (:translate ,vop)
@@ -626,7 +626,7 @@ May emit additional instructions using the temporary register."
        ,@(if (null register-arg)
              `(;; Lisp vector indexing version
                (defknown ,ix-vop (simple-array signed-word fixnum signed-word) ,(or rtype '(values))
-                   (flushable always-translatable))
+                   (flushable always-translatable dx-safe))
                ;;
                (define-vop (,ix-vop sse-load-ix-op)
                  (:translate ,ix-vop)
@@ -696,7 +696,7 @@ May emit additional instructions using the temporary register."
        ,(unless setf-name `(export ',name))
        (save-intrinsic-spec ,name ,whole)
        (defknown ,vop (system-area-pointer signed-word fixnum signed-word sse-pack) (values)
-           (unsafe always-translatable))
+           (always-translatable))
        ;;
        (define-vop (,vop sse-store-op)
          (:translate ,vop)
@@ -712,7 +712,7 @@ May emit additional instructions using the temporary register."
        ;;
        ;; Lisp vector indexing version
        (defknown ,ix-vop (simple-array signed-word fixnum signed-word sse-pack) (values)
-           (unsafe always-translatable))
+           (always-translatable))
        ;;
        (define-vop (,ix-vop sse-store-ix-op)
          (:translate ,ix-vop)
