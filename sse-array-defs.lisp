@@ -10,12 +10,12 @@
 
 ;;; Prefetch: AREF-PREFETCH-*, ROW-MAJOR-AREF-PREFETCH-*
 
-(def-aref-intrinsic #:PREFETCH-T0 nil cpu-prefetch-t0 nil :ref-size 0)
-(def-aref-intrinsic #:PREFETCH-T1 nil cpu-prefetch-t1 nil :ref-size 0)
-(def-aref-intrinsic #:PREFETCH-T2 nil cpu-prefetch-t2 nil :ref-size 0)
-(def-aref-intrinsic #:PREFETCH-NTA nil cpu-prefetch-nta nil :ref-size 0)
+(def-aref-intrinsic #:PREFETCH-T0 nil cpu-prefetch-t0 nil :ref-size 0 :side-effect? t)
+(def-aref-intrinsic #:PREFETCH-T1 nil cpu-prefetch-t1 nil :ref-size 0 :side-effect? t)
+(def-aref-intrinsic #:PREFETCH-T2 nil cpu-prefetch-t2 nil :ref-size 0 :side-effect? t)
+(def-aref-intrinsic #:PREFETCH-NTA nil cpu-prefetch-nta nil :ref-size 0 :side-effect? t)
 
-(def-aref-intrinsic #:CLFLUSH nil cpu-clflush nil :ref-size 1)
+(def-aref-intrinsic #:CLFLUSH nil cpu-clflush nil :ref-size 1 :side-effect? t)
 
 ;;; Single-float
 

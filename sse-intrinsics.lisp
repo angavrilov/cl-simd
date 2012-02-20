@@ -24,12 +24,12 @@
 
 ;;; Prefetch
 
-(def-load-intrinsic cpu-prefetch-t0 nil prefetch "_mm_prefetch" :tags (:t0) :size :byte :postfix-fmt ",_MM_HINT_T0")
-(def-load-intrinsic cpu-prefetch-t1 nil prefetch "_mm_prefetch" :tags (:t1) :size :byte :postfix-fmt ",_MM_HINT_T1")
-(def-load-intrinsic cpu-prefetch-t2 nil prefetch "_mm_prefetch" :tags (:t2) :size :byte :postfix-fmt ",_MM_HINT_T2")
-(def-load-intrinsic cpu-prefetch-nta nil prefetch "_mm_prefetch" :tags (:nta) :size :byte :postfix-fmt ",_MM_HINT_NTA")
+(def-load-intrinsic cpu-prefetch-t0 nil prefetch "_mm_prefetch" :tags (:t0) :size :byte :postfix-fmt ",_MM_HINT_T0" :side-effect? t)
+(def-load-intrinsic cpu-prefetch-t1 nil prefetch "_mm_prefetch" :tags (:t1) :size :byte :postfix-fmt ",_MM_HINT_T1" :side-effect? t)
+(def-load-intrinsic cpu-prefetch-t2 nil prefetch "_mm_prefetch" :tags (:t2) :size :byte :postfix-fmt ",_MM_HINT_T2" :side-effect? t)
+(def-load-intrinsic cpu-prefetch-nta nil prefetch "_mm_prefetch" :tags (:nta) :size :byte :postfix-fmt ",_MM_HINT_NTA" :side-effect? t)
 
-(def-load-intrinsic cpu-clflush nil clflush "_mm_clflush" :size :byte)
+(def-load-intrinsic cpu-clflush nil clflush "_mm_clflush" :size :byte :side-effect? t)
 
 ;;; CPU control
 

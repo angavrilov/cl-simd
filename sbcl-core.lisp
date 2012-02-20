@@ -590,7 +590,7 @@ May emit additional instructions using the temporary register."
 
 (defmacro def-load-intrinsic (&whole whole
                               name rtype insn c-name
-                              &key register-arg tags postfix-fmt (size :qword))
+                              &key register-arg tags postfix-fmt (size :qword) side-effect?)
   (declare (ignore c-name postfix-fmt))
   (let* ((vop (symbolicate "%" name))
          (ix-vop (symbolicate vop "/IX"))
@@ -598,13 +598,16 @@ May emit additional instructions using the temporary register."
          (r-arg (if rtype '(r)))
          (rtypes (if rtype
                      `(:result-types ,(type-name-to-primitive rtype))
-                     `(:results))))
+                     `(:results)))
+         (known-flags (if side-effect?
+                          '(always-translatable dx-safe)
+                          '(flushable always-translatable dx-safe))))
     (assert (or rtype (not register-arg)))
     `(progn
        (export ',name)
        (save-intrinsic-spec ,name ,whole)
        (defknown ,vop (,@valtype system-area-pointer signed-word fixnum signed-word)
-           ,(or rtype '(values)) (flushable always-translatable dx-safe))
+           ,(or rtype '(values)) ,known-flags)
        ;;
        (define-vop (,vop ,(if register-arg 'sse-xmm-load-op 'sse-load-op))
          (:translate ,vop)
@@ -626,7 +629,7 @@ May emit additional instructions using the temporary register."
        ,@(if (null register-arg)
              `(;; Lisp vector indexing version
                (defknown ,ix-vop (simple-array signed-word fixnum signed-word) ,(or rtype '(values))
-                   (flushable always-translatable dx-safe))
+                    ,known-flags)
                ;;
                (define-vop (,ix-vop sse-load-ix-op)
                  (:translate ,ix-vop)

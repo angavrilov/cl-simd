@@ -205,7 +205,7 @@ Should be assumed to be SIMPLE-ARRAY, except that displacing with MAKE-SSE-ARRAY
             (ash (1- ref-size) (- shift)) ; gap (size of SIMD overreach)
             dim-info)))
 
-(defmacro def-aref-intrinsic (postfix rtype reader writer &key (ref-size 16))
+(defmacro def-aref-intrinsic (postfix rtype reader writer &key (ref-size 16) side-effect?)
   (let* ((rm-aref (symbolicate "ROW-MAJOR-AREF-" postfix))
          (rm-aset (if writer (symbolicate "ROW-MAJOR-ASET-" postfix)))
          (aref (symbolicate "AREF-" postfix))
@@ -215,6 +215,9 @@ Should be assumed to be SIMPLE-ARRAY, except that displacing with MAKE-SSE-ARRAY
          (writer-vop (if writer (symbolicate "%" writer)))
          (writer/ix-vop (if writer (symbolicate "%" writer "/IX")))
          (rtype (or rtype '(values)))
+         (known-flags (if side-effect?
+                          '(dx-safe)
+                          '(foldable flushable dx-safe)))
          (index-expression
           (if (= ref-size 0)
               ``(the signed-word index)
@@ -222,7 +225,7 @@ Should be assumed to be SIMPLE-ARRAY, except that displacing with MAKE-SSE-ARRAY
     `(progn
        ;; ROW-MAJOR-AREF
        (export ',rm-aref)
-       (defknown ,rm-aref (array index) ,rtype (foldable flushable dx-safe))
+       (defknown ,rm-aref (array index) ,rtype ,known-flags)
        (defun ,rm-aref (array index)
          (with-sse-data ((sap data array)
                          (offset index))
@@ -238,7 +241,7 @@ Should be assumed to be SIMPLE-ARRAY, except that displacing with MAKE-SSE-ARRAY
                               ,step ,+vector-data-fixup+)))
        ;; AREF
        (export ',aref)
-       (defknown ,aref (array &rest index) ,rtype (foldable flushable dx-safe))
+       (defknown ,aref (array &rest index) ,rtype ,known-flags)
        (defun ,aref (array &rest indices)
          (declare (truly-dynamic-extent indices))
          (with-sse-data ((sap data array)

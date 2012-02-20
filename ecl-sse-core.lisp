@@ -242,7 +242,8 @@
                                           ,(fmtw "(&(#0)->array.self.~A[#1])" (second spec))))
                            known-elt-types)))))))
 
-(defmacro def-aref-intrinsic (tag val-type reader-fun writer-fun &key (ref-size 16))
+(defmacro def-aref-intrinsic (tag val-type reader-fun writer-fun &key (ref-size 16) side-effect?)
+  (declare (ignore side-effect?))
   `(%def-aref-intrinsic ,tag ,val-type ,(pointer-c-type-of val-type)
                         ,(get reader-fun 'c-function-name) ,(get writer-fun 'c-function-name)
                         :bsize ,ref-size
@@ -298,8 +299,8 @@
          (def-inline ,name :unsafe (,@prefix-itypes si:foreign-data ,@postfix-itypes fixnum) ,rftype
                      ,(fmt "(((char*)(#~A)->foreign.data) + #~A)"))))))
 
-(defmacro def-load-intrinsic (name ret-type insn c-name &key register-arg tags size postfix-fmt)
-  (declare (ignore insn tags size))
+(defmacro def-load-intrinsic (name ret-type insn c-name &key register-arg tags size postfix-fmt side-effect?)
+  (declare (ignore insn tags size side-effect?))
   `(def-mem-intrinsic ,name ,(pointer-c-type-of ret-type) ,ret-type ,c-name
                       :prefix-args ,(if register-arg (list ret-type))
                       :postfix-fmt ,(or postfix-fmt "")))
