@@ -12,7 +12,7 @@
   #+sb-building-contrib :pathname
   #+sb-building-contrib #p"SYS:CONTRIB;CL-SIMD;"
   :components
-  #+(and sbcl sb-sse-intrinsics)
+  #+(and sbcl sb-simd-pack)
   ((:file "sse-package")
    (:file "sbcl-core" :depends-on ("sse-package"))
    (:file "sse-intrinsics" :depends-on ("sbcl-core"))
@@ -27,17 +27,17 @@
    (:file "sse-array-defs" :depends-on ("sse-intrinsics"))
    (:file "ecl-sse-utils" :depends-on ("sse-intrinsics"))
    (:file "sse-utils" :depends-on ("ecl-sse-utils")))
-  #-(or (and sbcl sb-sse-intrinsics)
+  #-(or (and sbcl sb-simd-pack)
         (and ecl sse2))
   ())
 
-#+(or (and sbcl sb-sse-intrinsics)
+#+(or (and sbcl sb-simd-pack)
       (and ecl sse2))
 (defmethod perform :after ((o load-op) (c (eql (find-system :cl-simd))))
   (provide :cl-simd))
 
 (defmethod perform ((o test-op) (c (eql (find-system :cl-simd))))
-  #+(or (and sbcl sb-sse-intrinsics)
+  #+(or (and sbcl sb-simd-pack)
         (and ecl sse2))
   (or (load (compile-file "test-sfmt.lisp"))
       (error "test-sfmt failed")))

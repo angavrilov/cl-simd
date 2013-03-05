@@ -8,13 +8,29 @@
 
 (in-package #:SSE)
 
+(eval-when (:load-toplevel :compile-toplevel :execute)
+  (define-symbol-macro +any-sse-reg+
+      '(int-sse-reg single-sse-reg double-sse-reg))
+  (define-symbol-macro +any-sse-reg/immediate+
+      '(int-sse-reg single-sse-reg double-sse-reg
+        int-sse-immediate single-sse-immediate double-sse-immediate)))
+
 #|---------------------------------|
  |       SPECIFIC PACK TYPES       |
  |---------------------------------|#
 
+(deftype sse-pack (&optional (arg nil arg-p))
+  (if arg-p `(simd-pack ,arg) 'simd-pack))
+
 (deftype int-sse-pack () '(sse-pack integer))
 (deftype float-sse-pack () '(sse-pack single-float))
 (deftype double-sse-pack () '(sse-pack double-float))
+
+(declaim (inline sse-pack-p))
+(defun sse-pack-p (arg) (simd-pack-p arg))
+
+;; Has no effect; just to stop any errors
+(defvar *sse-pack-print-mode* nil)
 
 #|---------------------------------|
  |    HELPER FUNCTIONS & MACROS    |
@@ -28,6 +44,23 @@
 (defun type-name-to-primitive (lt)
   (primitive-type-name (primitive-type (specifier-type lt))))
 
+(defun type-name-to-reg (lt)
+  (ecase lt
+    (int-sse-pack 'int-sse-reg)
+    (float-sse-pack 'single-sse-reg)
+    (double-sse-pack 'double-sse-reg)))
+
+(defun type-name-to-tag (lt)
+  (let ((elt (ecase lt
+               (int-sse-pack 'integer)
+               (float-sse-pack 'single-float)
+               (double-sse-pack 'double-float))))
+    (or (position elt *simd-pack-element-types*)
+        (error "Unknown tag for type ~A" lt))))
+
+(defmacro %mkpack (type lo hi)
+  `(%make-simd-pack ,(type-name-to-tag type) ,lo ,hi))
+
 (defun move-cmd-for-type (lt)
   ;; Select a move instruction that matches the type name best
   (ecase lt
@@ -37,7 +70,7 @@
 (defun ensure-reg-or-mem (tn)
   ;; Spill immediate constants to inline memory
   (sc-case tn
-    ((sse-pack-immediate)
+    ((int-sse-immediate single-sse-immediate double-sse-immediate)
      (register-inline-constant (tn-value tn)))
     ((immediate)
      (register-inline-constant :dword (tn-value tn)))
@@ -278,7 +311,7 @@ May emit additional instructions using the temporary register."
        (:translate ,fname)
        (:args (arg :scs (,aregtype) :target dst))
        (:arg-types ,atype)
-       (:results (dst :scs (sse-reg)))
+       (:results (dst :scs (,(type-name-to-reg rtype))))
        (:result-types ,(type-name-to-primitive rtype))
        (:policy :fast-safe)
        (:generator 1
@@ -289,49 +322,45 @@ May emit additional instructions using the temporary register."
  |   UNARY OPERATION INTRINSICS    |
  |---------------------------------|#
 
-(define-vop (sse-unary-base-op)
+(define-vop (sse-unary-op)
   ;; no immediate because expecting to be folded
-  (:args (x :scs (sse-reg)))
-  (:arg-types sse-pack)
+  (:args (x :scs #.+any-sse-reg+))
+  (:arg-types simd-pack)
   (:policy :fast-safe)
   (:note "inline SSE unary operation")
   (:vop-var vop)
   (:save-p :compute-only))
-
-(define-vop (sse-unary-op sse-unary-base-op)
-  (:args (x :scs (sse-reg) :target r))
-  (:results (r :scs (sse-reg))))
-
-(define-vop (sse-unary-to-int-op sse-unary-base-op)
-  (:results (r :scs (signed-reg))))
-
-(define-vop (sse-unary-to-uint-op sse-unary-base-op)
-  (:results (r :scs (unsigned-reg))))
 
 (defmacro def-unary-intrinsic (&whole whole
                                name rtype insn cost c-name
                                &key
                                partial ; instruction modifies only part of the destination
                                immediate-arg result-size arg-type)
-  (declare (ignore c-name arg-type))
+  (declare (ignore c-name))
   (let* ((imm (if immediate-arg '(imm)))
-         (immt (if immediate-arg (list immediate-arg))))
+         (immt (if immediate-arg (list immediate-arg)))
+         (rprimtype (type-name-to-primitive rtype))
+         (rregtype (cond ((subtypep rtype 'unsigned-byte)
+                          'unsigned-reg)
+                         ((subtypep rtype 'integer)
+                          'signed-reg)
+                         (t (type-name-to-reg rtype))))
+         (aregtype (type-name-to-reg (or arg-type rtype)))
+         (target (if (eq rregtype aregtype) '(:target r) '())))
     (assert (or (not partial) (not (subtypep rtype 'integer))))
     `(progn
        (export ',name)
        (save-intrinsic-spec ,name ,whole)
        (defknown ,name (sse-pack ,@immt) ,rtype (foldable flushable dx-safe))
        ;;
-       (define-vop (,name ,(cond ((subtypep rtype 'unsigned-byte)
-                                  'sse-unary-to-uint-op)
-                                 ((subtypep rtype 'integer)
-                                  'sse-unary-to-int-op)
-                                 (t 'sse-unary-op)))
+       (define-vop (,name sse-unary-op)
          (:translate ,name)
-         (:result-types ,(type-name-to-primitive rtype))
+         (:args (x :scs ,+any-sse-reg+ ,@target))
          ,@(if immediate-arg
-               `((:arg-types sse-pack (:constant ,immediate-arg))
+               `((:arg-types simd-pack (:constant ,immediate-arg))
                  (:info imm)))
+         (:results (r :scs (,rregtype)))
+         (:result-types ,rprimtype)
          (:generator ,cost
            ,@(ecase partial
                     (:one-arg `((ensure-move ,rtype r x)
@@ -346,7 +375,7 @@ May emit additional instructions using the temporary register."
  |  UNARY TO INT32 & SIGN-EXTEND   |
  |---------------------------------|#
 
-(define-vop (sse-cvt-to-int32-op sse-unary-base-op)
+(define-vop (sse-cvt-to-int32-op sse-unary-op)
   (:temporary (:sc signed-reg :offset rax-offset :target r :to :result) rax)
   (:results (r :scs (signed-reg))))
 
@@ -380,6 +409,8 @@ May emit additional instructions using the temporary register."
      ;;
      (define-vop (,name sse-not-op)
        (:translate ,name)
+       (:args (x :scs ,+any-sse-reg+ :target r))
+       (:results (r :scs (,(type-name-to-reg rtype))))
        (:result-types ,(type-name-to-primitive rtype))
        (:generator 3
          (if (location= x r)
@@ -395,10 +426,10 @@ May emit additional instructions using the temporary register."
  |---------------------------------|#
 
 (define-vop (sse-binary-base-op)
-  (:args (x :scs (sse-reg sse-pack-immediate) :target r)
-         (y :scs (sse-reg sse-pack-immediate)))
-  (:results (r :scs (sse-reg)))
-  (:arg-types sse-pack sse-pack)
+  (:args (x :scs #.+any-sse-reg/immediate+ :target r)
+         (y :scs #.+any-sse-reg/immediate+))
+  (:results (r :scs (int-sse-reg)))
+  (:arg-types simd-pack simd-pack)
   (:policy :fast-safe)
   (:note "inline SSE binary operation")
   (:vop-var vop)
@@ -408,8 +439,8 @@ May emit additional instructions using the temporary register."
   (:temporary (:sc sse-reg) tmp))
 
 (define-vop (sse-binary-comm-op sse-binary-base-op)
-  (:args (x :scs (sse-reg sse-pack-immediate) :target r)
-         (y :scs (sse-reg sse-pack-immediate) :target r)))
+  (:args (x :scs #.+any-sse-reg/immediate+ :target r)
+         (y :scs #.+any-sse-reg/immediate+ :target r)))
 
 (defmacro def-binary-intrinsic (&whole whole
                                 name rtype insn cost c-name
@@ -424,9 +455,10 @@ May emit additional instructions using the temporary register."
        ;;
        (define-vop (,name ,(if commutative 'sse-binary-comm-op 'sse-binary-op))
          (:translate ,name)
+         (:results (r :scs (,(type-name-to-reg rtype))))
          (:result-types ,(type-name-to-primitive rtype))
          ,@(if immediate-arg
-               `((:arg-types sse-pack sse-pack (:constant ,immediate-arg))
+               `((:arg-types simd-pack simd-pack (:constant ,immediate-arg))
                  (:info imm)))
          (:generator ,cost
            ,@(if commutative
@@ -446,21 +478,21 @@ May emit additional instructions using the temporary register."
  |---------------------------------|#
 
 (define-vop (sse-int-base-op)
-  (:results (r :scs (sse-reg)))
+  (:results (r :scs (int-sse-reg)))
   (:policy :fast-safe)
   (:note "inline SSE/integer operation")
   (:vop-var vop)
   (:save-p :compute-only))
 
 (define-vop (sse-int-op sse-int-base-op)
-  (:args (x :scs (sse-reg sse-pack-immediate) :target r)
+  (:args (x :scs #.+any-sse-reg/immediate+ :target r)
          (iv :scs (signed-reg signed-stack immediate)))
-  (:arg-types sse-pack signed-num))
+  (:arg-types simd-pack signed-num))
 
 (define-vop (sse-uint-op sse-int-base-op)
-  (:args (x :scs (sse-reg sse-pack-immediate) :target r)
+  (:args (x :scs #.+any-sse-reg/immediate+ :target r)
          (iv :scs (unsigned-reg unsigned-stack immediate)))
-  (:arg-types sse-pack unsigned-num))
+  (:arg-types simd-pack unsigned-num))
 
 (defmacro def-sse-int-intrinsic (&whole whole
                                  name itype rtype insn cost c-name
@@ -476,9 +508,10 @@ May emit additional instructions using the temporary register."
        ;;
        (define-vop (,name ,(if unsigned? 'sse-uint-op 'sse-int-op))
          (:translate ,name)
+         (:results (r :scs (,(type-name-to-reg rtype))))
          (:result-types ,(type-name-to-primitive rtype))
          ,@(if immediate-arg
-               `((:arg-types sse-pack
+               `((:arg-types simd-pack
                              ,(if unsigned? 'unsigned-num 'signed-num)
                              (:constant ,immediate-arg))
                  (:info imm)))
@@ -496,19 +529,19 @@ May emit additional instructions using the temporary register."
  |---------------------------------|#
 
 (define-vop (sse-comparison-op)
-  (:args (x :scs (sse-reg))
-         (y :scs (sse-reg sse-pack-immediate)))
-  (:arg-types sse-pack sse-pack)
+  (:args (x :scs #.+any-sse-reg+)
+         (y :scs #.+any-sse-reg/immediate+))
+  (:arg-types simd-pack simd-pack)
   (:policy :fast-safe)
   (:note "inline SSE binary comparison predicate")
   (:vop-var vop)
   (:save-p :compute-only))
 
 (define-vop (sse-comparison-comm-op sse-comparison-op)
-  (:args (x :scs (sse-reg)
-            :load-if (not (and (sc-is x sse-pack-immediate)
-                               (sc-is y sse-reg))))
-         (y :scs (sse-reg sse-pack-immediate))))
+  (:args (x :scs #.+any-sse-reg+
+            :load-if (not (and (sc-is x int-sse-immediate single-sse-immediate double-sse-immediate)
+                               (sc-is y int-sse-reg single-sse-reg double-sse-reg))))
+         (y :scs #.+any-sse-reg/immediate+)))
 
 (defmacro def-comparison-intrinsic (&whole whole
                                     name arg-type insn cost c-name
@@ -524,7 +557,7 @@ May emit additional instructions using the temporary register."
          (:conditional ,@tags)
          (:generator ,cost
            ,(if commutative
-                `(if (sc-is x sse-reg)
+                `(if (sc-is x int-sse-reg single-sse-reg double-sse-reg)
                      (inst ,insn x y)
                      (inst ,insn y x))
                 `(inst ,insn x y)))))))
@@ -534,7 +567,7 @@ May emit additional instructions using the temporary register."
  |---------------------------------|#
 
 (define-vop (sse-load-base-op)
-  (:results (r :scs (sse-reg)))
+  (:results (r :scs (int-sse-reg)))
   (:policy :fast-safe)
   (:note "inline SSE load operation"))
 
@@ -555,19 +588,19 @@ May emit additional instructions using the temporary register."
   (:info scale offset))
 
 (define-vop (sse-xmm-load-op sse-load-base-op)
-  (:args (value :scs (sse-reg sse-pack-immediate) :target r)
+  (:args (value :scs #.+any-sse-reg/immediate+ :target r)
          (sap :scs (sap-reg) :to :eval)
          (index :scs (signed-reg immediate) :target tmp))
-  (:arg-types sse-pack system-area-pointer signed-num
+  (:arg-types simd-pack system-area-pointer signed-num
               (:constant fixnum) (:constant signed-word))
   (:temporary (:sc signed-reg :from (:argument 2)) tmp)
   (:info scale offset))
 
 (define-vop (sse-xmm-load-op/tag sse-load-base-op)
-  (:args (value :scs (sse-reg sse-pack-immediate) :target r)
+  (:args (value :scs #.+any-sse-reg/immediate+ :target r)
          (sap :scs (sap-reg) :to :eval)
          (index :scs (any-reg signed-reg immediate) :target tmp))
-  (:arg-types sse-pack system-area-pointer tagged-num
+  (:arg-types simd-pack system-area-pointer tagged-num
               (:constant tagged-load-scale) (:constant signed-word))
   (:temporary (:sc any-reg :from (:argument 2)) tmp)
   (:info scale offset))
@@ -597,8 +630,9 @@ May emit additional instructions using the temporary register."
          (valtype (if register-arg '(sse-pack)))
          (r-arg (if rtype '(r)))
          (rtypes (if rtype
-                     `(:result-types ,(type-name-to-primitive rtype))
-                     `(:results)))
+                     `((:results (r :scs (,(type-name-to-reg rtype))))
+                       (:result-types ,(type-name-to-primitive rtype)))
+                     `((:results))))
          (known-flags (if side-effect?
                           '(always-translatable dx-safe)
                           '(flushable always-translatable dx-safe))))
@@ -611,13 +645,13 @@ May emit additional instructions using the temporary register."
        ;;
        (define-vop (,vop ,(if register-arg 'sse-xmm-load-op 'sse-load-op))
          (:translate ,vop)
-         ,rtypes
+         ,@rtypes
          (:generator 5
            ,(if register-arg `(ensure-load ,rtype r value))
            (inst ,insn ,@tags ,@r-arg (make-scaled-ea ,size sap index scale offset tmp))))
        (define-vop (,(symbolicate vop "/TAG") ,(if register-arg 'sse-xmm-load-op/tag 'sse-load-op/tag))
          (:translate ,vop)
-         ,rtypes
+         ,@rtypes
          (:generator 4
            ,(if register-arg `(ensure-load ,rtype r value))
            (inst ,insn ,@tags ,@r-arg (make-scaled-ea ,size sap index scale offset tmp :fixnum-index t))))
@@ -633,12 +667,12 @@ May emit additional instructions using the temporary register."
                ;;
                (define-vop (,ix-vop sse-load-ix-op)
                  (:translate ,ix-vop)
-                 ,rtypes
+                 ,@rtypes
                  (:generator 4
                    (inst ,insn ,@tags ,@r-arg (make-scaled-ea ,size sap index scale offset tmp))))
                (define-vop (,(symbolicate ix-vop "/TAG") sse-load-ix-op/tag)
                  (:translate ,ix-vop)
-                 ,rtypes
+                 ,@rtypes
                  (:generator 3
                    (inst ,insn ,@tags ,@r-arg (make-scaled-ea ,size sap index scale offset tmp :fixnum-index t))))
                ;;
@@ -656,36 +690,36 @@ May emit additional instructions using the temporary register."
 (define-vop (sse-store-op sse-store-base-op)
   (:args (sap :scs (sap-reg) :to :eval)
          (index :scs (signed-reg immediate) :target tmp)
-         (value :scs (sse-reg)))
+         (value :scs #.+any-sse-reg+))
   (:arg-types system-area-pointer signed-num
-              (:constant fixnum) (:constant signed-word) sse-pack)
+              (:constant fixnum) (:constant signed-word) simd-pack)
   (:temporary (:sc signed-reg :from (:argument 1)) tmp)
   (:info scale offset))
 
 (define-vop (sse-store-op/tag sse-store-base-op)
   (:args (sap :scs (sap-reg) :to :eval)
          (index :scs (any-reg signed-reg immediate) :target tmp)
-         (value :scs (sse-reg)))
+         (value :scs #.+any-sse-reg+))
   (:arg-types system-area-pointer tagged-num
-              (:constant tagged-load-scale) (:constant signed-word) sse-pack)
+              (:constant tagged-load-scale) (:constant signed-word) simd-pack)
   (:temporary (:sc any-reg :from (:argument 1)) tmp)
   (:info scale offset))
 
 (define-vop (sse-store-ix-op sse-store-base-op)
   (:args (sap :scs (descriptor-reg) :to :eval)
          (index :scs (signed-reg immediate) :target tmp)
-         (value :scs (sse-reg)))
+         (value :scs #.+any-sse-reg+))
   (:arg-types * signed-num
-              (:constant fixnum) (:constant signed-word) sse-pack)
+              (:constant fixnum) (:constant signed-word) simd-pack)
   (:temporary (:sc signed-reg :from (:argument 1)) tmp)
   (:info scale offset))
 
 (define-vop (sse-store-ix-op/tag sse-store-base-op)
   (:args (sap :scs (descriptor-reg) :to :eval)
          (index :scs (any-reg signed-reg immediate) :target tmp)
-         (value :scs (sse-reg)))
+         (value :scs #.+any-sse-reg+))
   (:arg-types * tagged-num
-              (:constant tagged-load-scale) (:constant signed-word) sse-pack)
+              (:constant tagged-load-scale) (:constant signed-word) simd-pack)
   (:temporary (:sc any-reg :from (:argument 1)) tmp)
   (:info scale offset))
 

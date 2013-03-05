@@ -106,8 +106,9 @@
          (and-x (symbolicate "AND-" postfix))
          (andn-x (symbolicate "ANDNOT-" postfix))
          (xor-x (symbolicate "XOR-" postfix))
-         (true (%make-sse-pack #xFFFFFFFFFFFFFFFF #xFFFFFFFFFFFFFFFF))
-         (false (%make-sse-pack 0 0)))
+         (tag (type-name-to-tag rtype))
+         (true (%make-simd-pack tag #xFFFFFFFFFFFFFFFF #xFFFFFFFFFFFFFFFF))
+         (false (%make-simd-pack tag 0 0)))
     `(progn
        (export ',name)
        (defknown ,name (sse-pack sse-pack sse-pack) ,rtype (foldable flushable))
@@ -170,13 +171,13 @@
 
 ;; Constants
 
-(define-symbol-macro 0.0-ps (truly-the float-sse-pack #.(%make-sse-pack 0 0)))
+(define-symbol-macro 0.0-ps (truly-the float-sse-pack #.(%mkpack float-sse-pack 0 0)))
 
-(define-symbol-macro true-ss (truly-the float-sse-pack #.(%make-sse-pack #xFFFFFFFF 0)))
-(define-symbol-macro true-ps (truly-the float-sse-pack #.(%make-sse-pack #xFFFFFFFFFFFFFFFF #xFFFFFFFFFFFFFFFF)))
+(define-symbol-macro true-ss (truly-the float-sse-pack #.(%mkpack float-sse-pack #xFFFFFFFF 0)))
+(define-symbol-macro true-ps (truly-the float-sse-pack #.(%mkpack float-sse-pack #xFFFFFFFFFFFFFFFF #xFFFFFFFFFFFFFFFF)))
 
-(define-symbol-macro false-ss (truly-the float-sse-pack #.(%make-sse-pack 0 0)))
-(define-symbol-macro false-ps (truly-the float-sse-pack #.(%make-sse-pack 0 0)))
+(define-symbol-macro false-ss (truly-the float-sse-pack #.(%mkpack float-sse-pack 0 0)))
+(define-symbol-macro false-ps (truly-the float-sse-pack #.(%mkpack float-sse-pack 0 0)))
 
 ;; Initialization
 
@@ -199,10 +200,10 @@
 ;; Arithmetic negation
 
 (def-utility neg-ss (arg) float-sse-pack
-  (xor-ps arg #.(%make-sse-pack #x80000000 0)))
+  (xor-ps arg #.(%mkpack float-sse-pack #x80000000 0)))
 
 (def-utility neg-ps (arg) float-sse-pack
-  (xor-ps arg #.(%make-sse-pack #x8000000080000000 #x8000000080000000)))
+  (xor-ps arg #.(%mkpack float-sse-pack #x8000000080000000 #x8000000080000000)))
 
 ;; Bitwise operations
 
@@ -224,13 +225,15 @@
 
 ;; Shuffle
 
-(declaim (inline %sse-pack-to-int %int-to-sse-pack %shuffle-subints))
+(declaim (inline %sse-pack-to-int %shuffle-subints))
 
 (defun %sse-pack-to-int (pack)
-  (logior (%sse-pack-low pack) (ash (%sse-pack-high pack) 64)))
+  (logior (%simd-pack-low pack) (ash (%simd-pack-high pack) 64)))
 
-(defun %int-to-sse-pack (val &aux (mask #xFFFFFFFFFFFFFFFF))
-  (%make-sse-pack (logand val mask) (logand (ash val -64) mask)))
+(defmacro %int-to-sse-pack (type val)
+  `(let ((val ,val)
+         (mask #xFFFFFFFFFFFFFFFF))
+     (truly-the ,type (%mkpack ,type (logand val mask) (logand (ash val -64) mask)))))
 
 (defun %shuffle-subints (xval yval imm bit-cnt &aux (mask (1- (ash 1 bit-cnt))))
   (flet ((bits (idx)
@@ -246,7 +249,7 @@
   (declare (type sse-pack x y))
   (let* ((xval (%sse-pack-to-int x))
          (yval (%sse-pack-to-int y)))
-    (truly-the float-sse-pack (%int-to-sse-pack (%shuffle-subints xval yval imm 32)))))
+    (%int-to-sse-pack float-sse-pack (%shuffle-subints xval yval imm 32))))
 
 #|---------------------------------|
  |       DOUBLE-FLOAT SUPPORT      |
@@ -254,13 +257,13 @@
 
 ;; Constants
 
-(define-symbol-macro 0.0-pd (truly-the double-sse-pack #.(%make-sse-pack 0 0)))
+(define-symbol-macro 0.0-pd (truly-the double-sse-pack #.(%mkpack double-sse-pack 0 0)))
 
-(define-symbol-macro true-sd (truly-the double-sse-pack #.(%make-sse-pack #xFFFFFFFFFFFFFFFF 0)))
-(define-symbol-macro true-pd (truly-the double-sse-pack #.(%make-sse-pack #xFFFFFFFFFFFFFFFF #xFFFFFFFFFFFFFFFF)))
+(define-symbol-macro true-sd (truly-the double-sse-pack #.(%mkpack double-sse-pack #xFFFFFFFFFFFFFFFF 0)))
+(define-symbol-macro true-pd (truly-the double-sse-pack #.(%mkpack double-sse-pack #xFFFFFFFFFFFFFFFF #xFFFFFFFFFFFFFFFF)))
 
-(define-symbol-macro false-sd (truly-the double-sse-pack #.(%make-sse-pack 0 0)))
-(define-symbol-macro false-pd (truly-the double-sse-pack #.(%make-sse-pack 0 0)))
+(define-symbol-macro false-sd (truly-the double-sse-pack #.(%mkpack double-sse-pack 0 0)))
+(define-symbol-macro false-pd (truly-the double-sse-pack #.(%mkpack double-sse-pack 0 0)))
 
 ;; Initialization
 
@@ -281,10 +284,10 @@
 ;; Arithmetic negation
 
 (def-utility neg-sd (arg) double-sse-pack
-  (xor-pd arg #.(%make-sse-pack #x8000000000000000 0)))
+  (xor-pd arg #.(%mkpack double-sse-pack #x8000000000000000 0)))
 
 (def-utility neg-pd (arg) double-sse-pack
-  (xor-pd arg #.(%make-sse-pack #x8000000000000000 #x8000000000000000)))
+  (xor-pd arg #.(%mkpack double-sse-pack #x8000000000000000 #x8000000000000000)))
 
 ;; Bitwise operations
 
@@ -309,8 +312,9 @@
 (defun shuffle-pd (x y imm)
   (declare (type sse-pack x y))
   (truly-the double-sse-pack
-             (%make-sse-pack (if (logtest imm 1) (%sse-pack-high x) (%sse-pack-low x))
-                             (if (logtest imm 2) (%sse-pack-high y) (%sse-pack-low y)))))
+             (%mkpack double-sse-pack
+                      (if (logtest imm 1) (%simd-pack-high x) (%simd-pack-low x))
+                      (if (logtest imm 2) (%simd-pack-high y) (%simd-pack-low y)))))
 
 #|---------------------------------|
  |         INTEGER SUPPORT         |
@@ -318,11 +322,11 @@
 
 ;; Constants
 
-(define-symbol-macro 0-pi (truly-the int-sse-pack #.(%make-sse-pack 0 0)))
+(define-symbol-macro 0-pi (truly-the int-sse-pack #.(%mkpack int-sse-pack 0 0)))
 
-(define-symbol-macro true-pi (truly-the int-sse-pack #.(%make-sse-pack #xFFFFFFFFFFFFFFFF #xFFFFFFFFFFFFFFFF)))
+(define-symbol-macro true-pi (truly-the int-sse-pack #.(%mkpack int-sse-pack #xFFFFFFFFFFFFFFFF #xFFFFFFFFFFFFFFFF)))
 
-(define-symbol-macro false-pi (truly-the int-sse-pack #.(%make-sse-pack 0 0)))
+(define-symbol-macro false-pi (truly-the int-sse-pack #.(%mkpack int-sse-pack 0 0)))
 
 ;; Initialization
 
@@ -425,17 +429,15 @@
 
 (defun slli-pi (x imm)
   (declare (type sse-pack x))
-  (truly-the int-sse-pack
-             (if (> imm 15)
-                 0-pi
-                 (%int-to-sse-pack (ash (%sse-pack-to-int x) (* 8 imm))))))
+  (if (> imm 15)
+      0-pi
+      (%int-to-sse-pack int-sse-pack (ash (%sse-pack-to-int x) (* 8 imm)))))
 
 (defun srli-pi (x imm)
   (declare (type sse-pack x))
-  (truly-the int-sse-pack
-             (if (> imm 15)
-                 0-pi
-                 (%int-to-sse-pack (ash (%sse-pack-to-int x) (* -8 imm))))))
+  (if (> imm 15)
+      0-pi
+      (%int-to-sse-pack int-sse-pack (ash (%sse-pack-to-int x) (* -8 imm)))))
 
 ;; Extract & insert
 
@@ -448,28 +450,29 @@
 (defun insert-pi16 (x intv imm)
   (declare (type sse-pack x))
   (let ((shift (* 16 (logand imm 7))))
-    (truly-the int-sse-pack
-               (%int-to-sse-pack
-                (logior (logand (%sse-pack-to-int x)
-                                (lognot (ash #xFFFF shift)))
-                        (ash (logand intv #xFFFF) shift))))))
+    (%int-to-sse-pack int-sse-pack
+                      (logior (logand (%sse-pack-to-int x)
+                                      (lognot (ash #xFFFF shift)))
+                              (ash (logand intv #xFFFF) shift)))))
 
 ;; Shuffle
 
 (defun shuffle-pi32 (x imm)
   (declare (type sse-pack x))
   (let* ((xval (%sse-pack-to-int x)))
-    (truly-the int-sse-pack (%int-to-sse-pack (%shuffle-subints xval xval imm 32)))))
+    (%int-to-sse-pack int-sse-pack (%shuffle-subints xval xval imm 32))))
 
 (defun shufflelo-pi16 (x imm)
   (declare (type sse-pack x))
-  (let* ((xval (%sse-pack-low x)))
-    (truly-the int-sse-pack (%make-sse-pack (%shuffle-subints xval xval imm 16)
-                                            (%sse-pack-high x)))))
+  (let* ((xval (%simd-pack-low x)))
+    (truly-the int-sse-pack (%mkpack int-sse-pack
+                                     (%shuffle-subints xval xval imm 16)
+                                     (%simd-pack-high x)))))
 
 (defun shufflehi-pi16 (x imm)
   (declare (type sse-pack x))
-  (let* ((xval (%sse-pack-high x)))
-    (truly-the int-sse-pack (%make-sse-pack (%sse-pack-low x)
-                                            (%shuffle-subints xval xval imm 16)))))
+  (let* ((xval (%simd-pack-high x)))
+    (truly-the int-sse-pack (%mkpack int-sse-pack
+                                     (%simd-pack-low x)
+                                     (%shuffle-subints xval xval imm 16)))))
 
