@@ -474,6 +474,57 @@ May emit additional instructions using the temporary register."
                    (ensure-move ,rtype r tmp))))))))
 
 #|---------------------------------|
+ |    TERNARY REG INTRINSICS       |
+ |---------------------------------|#
+
+(define-vop (sse-ternary-base-op)
+  (:args (x :scs #.+any-sse-reg/immediate+ :target r)
+         (y :scs #.+any-sse-reg/immediate+)
+         (z :scs #.+any-sse-reg/immediate+))
+  (:results (r :scs (int-sse-reg)))
+  (:arg-types simd-pack simd-pack simd-pack)
+  (:policy :fast-safe)
+  (:note "inline SSE ternary operation")
+  (:vop-var vop)
+  (:save-p :compute-only))
+
+(define-vop (sse-ternary-op sse-ternary-base-op)
+  (:temporary (:sc sse-reg) tmp))
+
+(defmacro def-ternary-intrinsic (&whole whole
+                                name rtype insn cost c-name
+                                &key implicit-reg tags x-type y-type
+                                  z-type)
+  (declare (ignore c-name x-type y-type z-type))
+  `(progn
+     (export ',name)
+     (save-intrinsic-spec ,name ,whole)
+     (defknown ,name (sse-pack sse-pack sse-pack) ,rtype
+         (foldable flushable dx-safe))
+     ;;
+     (define-vop (,name sse-ternary-op)
+       (:translate ,name)
+       (:results (r :scs (,(type-name-to-reg rtype))))
+       (:result-types ,(type-name-to-primitive rtype))
+       ,@(when implicit-reg
+              `((:temporary (:sc sse-reg :offset 0) xmm0)))
+       (:generator ,cost
+         ,@(if implicit-reg
+               ;; instruction requires z in xmm0.
+               `((unless (or (location= y r) (location= z r))
+                   (setf tmp r))
+                 (ensure-load ,rtype xmm0 z)
+                 (ensure-load ,rtype tmp x)
+                 (inst ,insn ,@tags tmp (ensure-reg-or-mem y) xmm0)
+                 (ensure-move ,rtype r tmp))
+               `((unless (or (location= y r) (location= z r))
+                   (setf tmp r))
+                 (ensure-load ,rtype tmp x)
+                 (inst ,insn ,@tags tmp (ensure-reg-or-mem y)
+                       (ensure-reg-or-mem z))
+                 (ensure-move ,rtype r tmp)))))))
+
+#|---------------------------------|
  |  XMM/INTEGER BINARY INTRINSICS  |
  |---------------------------------|#
 

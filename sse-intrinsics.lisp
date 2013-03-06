@@ -149,6 +149,11 @@
 (def-binary-intrinsic min-ps float-sse-pack minps 3  "_mm_min_ps":commutative t)
 (def-binary-intrinsic max-ss float-sse-pack maxss 3  "_mm_max_ss")
 (def-binary-intrinsic max-ps float-sse-pack maxps 3  "_mm_max_ps" :commutative t)
+(def-binary-intrinsic addsub-ps float-sse-pack addsubps 3 "_mm_addsub_ps")
+(def-binary-intrinsic hadd-ps   float-sse-pack haddps   5 "_mm_hadd_ps")
+(def-binary-intrinsic hsub-ps   float-sse-pack hsubps   5 "_mm_hsub_ps")
+(def-binary-intrinsic dp-ps     float-sse-pack dpps     11 "_mm_dp_ps"
+                      :commutative t :immediate-arg (unsigned-byte 8))
 
 (def-unary-intrinsic sqrt-ss  float-sse-pack sqrtss 20 "_mm_sqrt_ss" :partial t)
 (def-unary-intrinsic sqrt-ps  float-sse-pack sqrtps 20 "_mm_sqrt_ps")
@@ -156,6 +161,10 @@
 (def-unary-intrinsic rsqrt-ps float-sse-pack rsqrtps 20 "_mm_rsqrt_ps")
 (def-unary-intrinsic rcp-ss   float-sse-pack rcpss 13 "_mm_rcp_ss" :partial t)
 (def-unary-intrinsic rcp-ps   float-sse-pack rcpps 13 "_mm_rcp_ps")
+(def-unary-intrinsic round-ps float-sse-pack roundps 3 "_mm_round_ps"
+                     :immediate-arg (unsigned-byte 4))
+(def-unary-intrinsic round-ss float-sse-pack roundss 3 "_mm_round_ss" :partial t
+                     :immediate-arg (unsigned-byte 4))
 
 ;; Bitwise logic
 
@@ -227,7 +236,15 @@
 (def-binary-intrinsic movehl-ps float-sse-pack movhlps 1 "_mm_movehl_ps")
 (def-binary-intrinsic movelh-ps float-sse-pack movlhps 1 "_mm_movelh_ps")
 
+(def-unary-intrinsic movehdup-ps float-sse-pack movshdup 1 "_mm_movehdup_ps")
+(def-unary-intrinsic moveldup-ps float-sse-pack movsldup 1 "_mm_moveldup_ps")
+
 (def-unary-intrinsic movemask-ps (unsigned-byte 4) movmskps 1 "_mm_movemask_ps" :arg-type float-sse-pack)
+
+(def-binary-intrinsic blend-ps float-sse-pack blendps 1 "_mm_blend_ps"
+                      :immediate-arg (unsigned-byte 8))
+(def-ternary-intrinsic blendv-ps float-sse-pack blendvps 2 "_mm_blendv_ps"
+                       :implicit-reg t)
 
 ;; Shuffle
 
@@ -306,9 +323,18 @@
 (def-binary-intrinsic min-pd double-sse-pack minpd 3 "_mm_min_pd" :commutative t)
 (def-binary-intrinsic max-sd double-sse-pack maxsd 3 "_mm_max_sd")
 (def-binary-intrinsic max-pd double-sse-pack maxpd 3 "_mm_max_pd" :commutative t)
+(def-binary-intrinsic addsub-pd double-sse-pack addsubpd 3 "_mm_addsub_pd")
+(def-binary-intrinsic hadd-pd   double-sse-pack haddpd   5 "_mm_hadd_pd")
+(def-binary-intrinsic hsub-pd   double-sse-pack hsubpd   5 "_mm_hsub_pd")
+(def-binary-intrinsic dp-pd     double-sse-pack dppd     9 "_mm_dp_pd"
+                      :commutative t :immediate-arg (unsigned-byte 8))
 
-(def-binary-intrinsic sqrt-sd double-sse-pack sqrtsd 20 "_mm_sqrt_sd")
+(def-unary-intrinsic sqrt-sd double-sse-pack sqrtsd 20 "_mm_sqrt_sd" :partial t)
 (def-unary-intrinsic sqrt-pd double-sse-pack sqrtpd 20 "_mm_sqrt_pd")
+(def-unary-intrinsic round-pd double-sse-pack roundpd 3 "_mm_round_pd"
+                     :immediate-arg (unsigned-byte 4))
+(def-unary-intrinsic round-sd double-sse-pack roundsd 3 "_mm_round_sd" :partial t
+                     :immediate-arg (unsigned-byte 4))
 
 ;; Bitwise logic
 
@@ -378,6 +404,12 @@
 (def-binary-intrinsic move-sd double-sse-pack movsd 1 "_mm_move_sd")
 
 (def-unary-intrinsic movemask-pd (unsigned-byte 2) movmskpd 1 "_mm_movemask_pd" :arg-type double-sse-pack)
+(def-unary-intrinsic movedup-pd double-sse-pack movddup 1 "_mm_movedup_pd")
+
+(def-binary-intrinsic blend-pd double-sse-pack blendpd 1 "_mm_blend_pd"
+                      :immediate-arg (unsigned-byte 8))
+(def-ternary-intrinsic blendv-pd double-sse-pack blendvpd 2 "_mm_blendv_pd"
+                       :implicit-reg t)
 
 ;; Shuffle
 
@@ -467,6 +499,8 @@
 
 (def-load-intrinsic mem-ref-si64 int-sse-pack movd "_mm_loadl_epi64")
 
+(def-load-intrinsic stream-load-pi int-sse-pack movntdqa "_mm_stream_load_si128")
+
 (def-store-intrinsic mem-set-pi int-sse-pack movdqu "_mm_storeu_si128" :setf-name mem-ref-pi)
 (def-store-intrinsic mem-set-api int-sse-pack movdqa "_mm_store_si128" :setf-name mem-ref-api)
 
@@ -536,18 +570,32 @@
 (def-binary-intrinsic avg-pu8    int-sse-pack pavgb 1 "_mm_avg_epu8" :commutative t)
 (def-binary-intrinsic avg-pu16   int-sse-pack pavgw 1 "_mm_avg_epu16" :commutative t)
 
-(def-binary-intrinsic madd-pi16  int-sse-pack pmaddwd 1 "_mm_madd_epi16" :commutative t)
+(def-binary-intrinsic madd-pi16    int-sse-pack pmaddwd   1 "_mm_madd_epi16" :commutative t)
+(def-binary-intrinsic maddubs-pi16 int-sse-pack pmaddubsw 1 "_mm_maddubs_epi16")
 
 (def-binary-intrinsic max-pu8    int-sse-pack pmaxub 1 "_mm_max_epu8" :commutative t)
+(def-binary-intrinsic max-pi8    int-sse-pack pmaxsb 1 "_mm_max_epi8" :commutative t)
+(def-binary-intrinsic max-pu16   int-sse-pack pmaxuw 1 "_mm_max_epu16" :commutative t)
 (def-binary-intrinsic max-pi16   int-sse-pack pmaxsw 1 "_mm_max_epi16" :commutative t)
+(def-binary-intrinsic max-pu32   int-sse-pack pmaxud 1 "_mm_max_epu32" :commutative t)
+(def-binary-intrinsic max-pi32   int-sse-pack pmaxsd 1 "_mm_max_epi32" :commutative t)
 (def-binary-intrinsic min-pu8    int-sse-pack pminub 1 "_mm_min_epu8" :commutative t)
+(def-binary-intrinsic min-pi8    int-sse-pack pminsb 1 "_mm_min_epi8" :commutative t)
+(def-binary-intrinsic min-pu16   int-sse-pack pminuw 1 "_mm_min_epu16" :commutative t)
 (def-binary-intrinsic min-pi16   int-sse-pack pminsw 1 "_mm_min_epi16" :commutative t)
+(def-binary-intrinsic min-pu32   int-sse-pack pminud 1 "_mm_min_epu32" :commutative t)
+(def-binary-intrinsic min-pi32   int-sse-pack pminsd 1 "_mm_min_epi32" :commutative t)
 
-(def-binary-intrinsic mulhi-pi16 int-sse-pack pmulhw 3 "_mm_mulhi_epi16" :commutative t)
-(def-binary-intrinsic mulhi-pu16 int-sse-pack pmulhuw 3 "_mm_mulhi_epu16" :commutative t)
-(def-binary-intrinsic mullo-pi16 int-sse-pack pmullw 3 "_mm_mullo_epi16" :commutative t)
+(def-unary-intrinsic minpos-pu16 int-sse-pack phminposuw 3 "_mm_minpos_epu16")
+
+(def-binary-intrinsic mulhi-pi16  int-sse-pack pmulhw 3 "_mm_mulhi_epi16" :commutative t)
+(def-binary-intrinsic mulhi-pu16  int-sse-pack pmulhuw 3 "_mm_mulhi_epu16" :commutative t)
+(def-binary-intrinsic mullo-pi16  int-sse-pack pmullw 3 "_mm_mullo_epi16" :commutative t)
+(def-binary-intrinsic mullo-pi32  int-sse-pack pmulld 3 "_mm_mullo_epi32" :commutative t)
+(def-binary-intrinsic mulhrs-pi16 int-sse-pack pmulhrsw 3 "_mm_mulhrs_epi16" :commutative t)
 
 (def-binary-intrinsic mul-pu32   int-sse-pack pmuludq 3 "_mm_mul_epu32" :commutative t)
+(def-binary-intrinsic mul-pi32   int-sse-pack pmuldq  3 "_mm_mul_epi32" :commutative t)
 
 (def-binary-intrinsic sad-pu8    int-sse-pack psadbw 1 "_mm_sad_epu8" :commutative t)
 
@@ -560,6 +608,24 @@
 (def-binary-intrinsic subs-pi16  int-sse-pack psubsw 1 "_mm_subs_epi16")
 (def-binary-intrinsic subs-pu8   int-sse-pack psubusb 1 "_mm_subs_epu8")
 (def-binary-intrinsic subs-pu16  int-sse-pack psubusw 1 "_mm_subs_epu16")
+
+(def-binary-intrinsic hadd-pi16  int-sse-pack phaddw 1 "_mm_hadd_epi16")
+(def-binary-intrinsic hadd-pi32  int-sse-pack phaddd 1 "_mm_hadd_epi32")
+(def-binary-intrinsic hsub-pi16  int-sse-pack phsubw 1 "_mm_hsub_epi16")
+(def-binary-intrinsic hsub-pi32  int-sse-pack phsubd 1 "_mm_hsub_epi32")
+(def-binary-intrinsic hadds-pi16 int-sse-pack phaddsw 1 "_mm_hadds_epi16")
+(def-binary-intrinsic hsubs-pi16 int-sse-pack phsubsw 1 "_mm_hsubs_epi16")
+
+(def-binary-intrinsic sign-pi8   int-sse-pack psignb 1 "_mm_sign_epi8")
+(def-binary-intrinsic sign-pi16  int-sse-pack psignw 1 "_mm_sign_epi16")
+(def-binary-intrinsic sign-pi32  int-sse-pack psignd 1 "_mm_sign_epi32")
+
+(def-unary-intrinsic  abs-pi8    int-sse-pack pabsb 1 "_mm_abs_epi8")
+(def-unary-intrinsic  abs-pi16   int-sse-pack pabsw 1 "_mm_abs_epi16")
+(def-unary-intrinsic  abs-pi32   int-sse-pack pabsd 1 "_mm_abs_epi32")
+
+(def-binary-intrinsic mpsad-pu8 int-sse-pack mpsadbw 4 "_mm_mpsadbw_epu8"
+                      :immediate-arg (unsigned-byte 3))
 
 ;; Bitwise logic
 
@@ -638,6 +704,7 @@
 (def-binary-intrinsic =-pi8  int-sse-pack pcmpeqb 1 "_mm_cmpeq_epi8")
 (def-binary-intrinsic =-pi16 int-sse-pack pcmpeqw 1 "_mm_cmpeq_epi16")
 (def-binary-intrinsic =-pi32 int-sse-pack pcmpeqd 1 "_mm_cmpeq_epi32")
+(def-binary-intrinsic =-pi64 int-sse-pack pcmpeqq 1 "_mm_cmpeq_epi64")
 
 #+ecl
 (def-binary-intrinsic <-pi8  int-sse-pack nil nil "_mm_cmplt_epi8")
@@ -649,16 +716,22 @@
 (def-binary-intrinsic >-pi8  int-sse-pack pcmpgtb 1 "_mm_cmpgt_epi8")
 (def-binary-intrinsic >-pi16 int-sse-pack pcmpgtw 1 "_mm_cmpgt_epi16")
 (def-binary-intrinsic >-pi32 int-sse-pack pcmpgtd 1 "_mm_cmpgt_epi32")
+(def-binary-intrinsic >-pi64 int-sse-pack pcmpgtq 1 "_mm_cmpgt_epi64")
 
 ;; Misc
 
 (def-binary-intrinsic packs-pi16 int-sse-pack packsswb 1 "_mm_packs_epi16")
 (def-binary-intrinsic packs-pi32 int-sse-pack packssdw 1 "_mm_packs_epi32")
 (def-binary-intrinsic packus-pi16 int-sse-pack packuswb 1 "_mm_packus_epi16")
+(def-binary-intrinsic packus-pi32 int-sse-pack packusdw 1 "_mm_packus_epi32")
 
 (def-unary-intrinsic extract-pi16 (unsigned-byte 16) pextrw 1 "_mm_extract_epi16"
                      :immediate-arg (unsigned-byte 8) :arg-type int-sse-pack)
+(def-sse-int-intrinsic insert-pi8  fixnum int-sse-pack pinsrb 1 "_mm_insert_epi8"
+                       :immediate-arg (unsigned-byte 8))
 (def-sse-int-intrinsic insert-pi16 fixnum int-sse-pack pinsrw 1 "_mm_insert_epi16"
+                       :immediate-arg (unsigned-byte 8))
+(def-sse-int-intrinsic insert-pi32 fixnum int-sse-pack pinsrd 1 "_mm_insert_epi32"
                        :immediate-arg (unsigned-byte 8))
 
 (def-unary-intrinsic movemask-pi8 (unsigned-byte 16) pmovmskb 1 "_mm_movemask_epi8" :arg-type int-sse-pack)
@@ -673,11 +746,20 @@
 (def-binary-intrinsic unpacklo-pi32 int-sse-pack punpckldq 1 "_mm_unpacklo_epi32")
 (def-binary-intrinsic unpacklo-pi64 int-sse-pack punpcklqdq 1 "_mm_unpacklo_epi64")
 
+(def-binary-intrinsic alignr-pi8 int-sse-pack palignr 1 "_mm_alignr_epi8"
+                      :immediate-arg (unsigned-byte 8))
+
 (def-unary-intrinsic move-pi64 int-sse-pack movq 1 "_mm_move_epi64")
+
+(def-ternary-intrinsic blendv-pi8 int-sse-pack pblendvb 1 "_mm_blendv_epi8"
+                       :implicit-reg t)
+(def-binary-intrinsic blend-pi16 int-sse-pack pblendw 1 "_mm_blend_epi16"
+                      :immediate-arg (unsigned-byte 8))
 
 ;; Shuffle
 
 (def-unary-intrinsic shuffle-pi32 int-sse-pack pshufd 1 "_mm_shuffle_epi32" :immediate-arg (unsigned-byte 8))
+(def-binary-intrinsic shuffle-pi8 int-sse-pack pshufb 1 "_mm_shuffle_epi8")
 (def-unary-intrinsic shufflelo-pi16 int-sse-pack pshuflw 1 "_mm_shufflelo_epi16" :immediate-arg (unsigned-byte 8))
 (def-unary-intrinsic shufflehi-pi16 int-sse-pack pshufhw 1 "_mm_shufflehi_epi16" :immediate-arg (unsigned-byte 8))
 
@@ -729,3 +811,16 @@
 (def-unary-intrinsic convert-pi-to-su64 (unsigned-byte 64) movd 1
                      #-msvc "_mm_cvtsi128_si64" #+msvc "_mm_cvtsi128_si64x" :arg-type int-sse-pack)
 
+(def-unary-intrinsic convert-pi8-to-pi16  int-sse-pack pmovsxbw 1 "_mm_cvtepi8_epi16")
+(def-unary-intrinsic convert-pi8-to-pi32  int-sse-pack pmovsxbd 1 "_mm_cvtepi8_epi32")
+(def-unary-intrinsic convert-pi8-to-pi64  int-sse-pack pmovsxbq 1 "_mm_cvtepi8_epi64")
+(def-unary-intrinsic convert-pi16-to-pi32 int-sse-pack pmovsxwd 1 "_mm_cvtepi16_epi32")
+(def-unary-intrinsic convert-pi16-to-pi64 int-sse-pack pmovsxwq 1 "_mm_cvtepi16_epi64")
+(def-unary-intrinsic convert-pi32-to-pi64 int-sse-pack pmovsxdq 1 "_mm_cvtepi32_epi64")
+
+(def-unary-intrinsic convert-pu8-to-pi16  int-sse-pack pmovzxbw 1 "_mm_cvtepu8_epi16")
+(def-unary-intrinsic convert-pu8-to-pi32  int-sse-pack pmovzxbd 1 "_mm_cvtepu8_epi32")
+(def-unary-intrinsic convert-pu8-to-pi64  int-sse-pack pmovzxbq 1 "_mm_cvtepu8_epi64")
+(def-unary-intrinsic convert-pu16-to-pi32 int-sse-pack pmovzxwd 1 "_mm_cvtepu16_epi32")
+(def-unary-intrinsic convert-pu16-to-pi64 int-sse-pack pmovzxwq 1 "_mm_cvtepu16_epi64")
+(def-unary-intrinsic convert-pu32-to-pi64 int-sse-pack pmovzxdq 1 "_mm_cvtepu32_epi64")

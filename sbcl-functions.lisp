@@ -41,6 +41,12 @@
                   (declare (type sse-pack x y))
                   (truly-the ,rtype (%primitive ,name x y)))))
            ;;
+           (def-ternary-intrinsic (name rtype insn cost c-name &key &allow-other-keys)
+             (declare (ignore insn cost c-name))
+             `(defun ,name (x y z)
+                (declare (type sse-pack x y z))
+                (truly-the ,rtype (%primitive ,name x y z))))
+           ;;
            (def-sse-int-intrinsic (name itype rtype insn cost c-name &key immediate-arg &allow-other-keys)
              (declare (ignore insn cost c-name))
              (unless immediate-arg
@@ -476,3 +482,29 @@
                                      (%simd-pack-low x)
                                      (%shuffle-subints xval xval imm 16)))))
 
+;; Align
+
+(defun alignr-pi8 (x y imm)
+  (declare (type sse-pack x y))
+  (let ((xval (%sse-pack-to-int x))
+        (yval (%sse-pack-to-int y))
+        (shift (- (* 8 imm))))
+    (truly-the int-sse-pack
+               (%int-to-sse-pack int-sse-pack
+                (logand (ash (logior (ash xval 128) yval) shift)
+                        #xffffffffffffffffffffffffffffffff)))))
+
+;; Blend
+
+(defun blend-pi16 (x y imm)
+  (declare (type sse-pack x y))
+  (let ((xval (%sse-pack-to-int x))
+        (yval (%sse-pack-to-int y))
+        (mask (loop with mask = 0 ; expand selection mask into words
+                 for i to 7
+                 when (= (ldb (byte 1 i) imm) 1)
+                 do (setf mask (logior mask (ash #xffff (* 16 i))))
+                 finally (return mask))))
+    (truly-the int-sse-pack
+               (%int-to-sse-pack int-sse-pack
+                (logxor yval (logand (logxor yval xval) mask))))))
