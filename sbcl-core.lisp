@@ -444,7 +444,8 @@ May emit additional instructions using the temporary register."
 
 (defmacro def-binary-intrinsic (&whole whole
                                 name rtype insn cost c-name
-                                &key commutative tags immediate-arg x-type y-type)
+                                &key commutative mem-alt-insn tags immediate-arg
+                                  x-type y-type)
   (declare (ignore c-name x-type y-type))
   (let* ((imm (if immediate-arg '(imm)))
          (immt (if immediate-arg (list immediate-arg))))
@@ -470,7 +471,15 @@ May emit additional instructions using the temporary register."
                  `((unless (location= y r)
                      (setf tmp r))
                    (ensure-load ,rtype tmp x)
-                   (inst ,insn ,@tags tmp (ensure-reg-or-mem y) ,@imm)
+                   ,(let ((std-inst `(inst ,insn ,@tags tmp
+                                           (ensure-reg-or-mem y) ,@imm))
+                          (alt-inst `(inst ,mem-alt-insn ,@tags tmp
+                                           (ensure-reg-or-mem y) ,@imm)))
+                         (if mem-alt-insn
+                             `(sc-case y
+                                (#.+any-sse-reg+ ,std-inst)
+                                (t ,alt-inst))
+                             std-inst))
                    (ensure-move ,rtype r tmp))))))))
 
 #|---------------------------------|
