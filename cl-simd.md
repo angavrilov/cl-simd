@@ -120,41 +120,44 @@ Floating-point arithmetic intrinsics have trivial IEEE semantics when
 given QNaN and SNaN arguments.  Comparisons have more complex behavior,
 detailed in the following table:
 
-Single-float        Double-float        Condition               Result for NaN    QNaN traps
-`=-ss`, `=-ps`      `=-sd`, `=-pd`      Equal                   False             No
-`<-ss`, `<-ps`      `<-sd`, `<-pd`      Less                    False             Yes
-`<=-ss`, `<=-ps`    `<=-sd`, `<=-pd`    Less or equal           False             Yes
-`>-ss`, `>-ps`      `>-sd`, `>-pd`      Greater                 False             Yes
-`>=-ss`, `>=-ps`    `>=-sd`, `>=-pd`    Greater or equal        False             Yes
-`/=-ss`, `/=-ps`    `/=-sd`, `/=-pd`    Not equal               True              No
-`/<-ss`, `/<-ps`    `/<-sd`, `/<-pd`    Not less                True              Yes
-`/<=-ss`,           `/<=-sd`,           Not less or equal       True              Yes
-`/<=-ps`            `/<=-pd`
-`/>-ss`, `/>-ps`    `/>-sd`, `/>-pd`    Not greater             True              Yes
-`/>=-ss`,           `/>=-sd`,           Not greater or equal    True              Yes
-`/>=-ps`            `/>=-pd`
-`cmpord-ss`,        `cmpord-sd`,        Ordered, i.e.  no NaN   False             No
-`cmpord-ps`         `cmpord-pd`         args
-`cmpunord-ss`,      `cmpunord-sd`,      Unordered, i.e.  with   True              No
-`cmpunord-ps`       `cmpunord-pd`       NaN args
+| Single-float    | Double-float    | Condition                      | Result for NaN | QNaN traps |
+|-----------------+-----------------+--------------------------------+----------------+------------|
+| `=-ss`,`=-ps`   | `=-sd`,`=-pd`   | Equal                          | False          | No         |
+| `<-ss`,`<-ps`   | `<-sd`,`<-pd`   | Less                           | False          | Yes        |
+| `<=-ss`,`<=-ps` | `<=-sd`,`<=-pd` | Less or equal                  | False          | Yes        |
+| `>-ss`,`>-ps`   | `>-sd`,`>-pd`   | Greater                        | False          | Yes        |
+| `>=-ss`,`>=-ps` | `>=-sd`,`>=-pd` | Greater or equal               | False          | Yes        |
+| `/=-ss`,`/=-ps` | `/=-sd`,`/=-pd` | Not equal                      | True           | No         |
+| `/<-ss`,`/<-ps` | `/<-sd`,`/<-pd` | Not less                       | True           | Yes        |
+| `/<=-ss`,       | `/<=-sd`,       | Not less or equal              | True           | Yes        |
+| `/<=-ps`        | `/<=-pd`        |                                |                |            |
+| `/>-ss`,`/>-ps` | `/>-sd`,`/>-pd` | Not greater                    | True           | Yes        |
+| `/>=-ss`,       | `/>=-sd`,       | Not greater or equal           | True           | Yes        |
+| `/>=-ps`        | `/>=-pd`        |                                |                |            |
+| `cmpord-ss`,    | `cmpord-sd`,    | Ordered, i.e.  no NaN args     | False          | No         |
+| `cmpord-ps`     | `cmpord-pd`     |                                |                |            |
+| `cmpunord-ss`,  | `cmpunord-sd`,  | Unordered, i.e.  with NaN args | True           | No         |
+| `cmpunord-ps`   | `cmpunord-pd`   |                                |                |            |
+
 
    Likewise for scalar comparison predicates, i.e.  functions that
 return the result of the comparison as a Lisp boolean instead of a
 bitmask sse-pack:
 
-Single-float    Double-float    Condition               Result for NaN    QNaN traps
-`=-ss?`         `=-sd?`         Equal                   True              Yes
-`=-ssu?`        `=-sdu?`        Equal                   True              No
-`<-ss?`         `<-sd?`         Less                    True              Yes
-`<-ssu?`        `<-sdu?`        Less                    True              No
-`<=-ss?`        `<=-sd?`        Less or equal           True              Yes
-`<=-ssu?`       `<=-sdu?`       Less or equal           True              No
-`>-ss?`         `>-sd?`         Greater                 False             Yes
-`>-ssu?`        `>-sdu?`        Greater                 False             No
-`>=-ss?`        `>=-sd?`        Greater or equal        False             Yes
-`>=-ssu?`       `>=-sdu?`       Greater or equal        False             No
-`/=-ss?`        `/=-sd?`        Not equal               False             Yes
-`/=-ssu?`       `/=-sdu?`       Not equal               False             No
+| Single-float | Double-float | Condition        | Result_for_NaN | QNaN_traps |
+|--------------+--------------+------------------+----------------+------------|
+| `=-ss?`      | `=-sd?`      | Equal            | True           | Yes        |
+| `=-ssu?`     | `=-sdu?`     | Equal            | True           | No         |
+| `<-ss?`      | `<-sd?`      | Less             | True           | Yes        |
+| `<-ssu?`     | `<-sdu?`     | Less             | True           | No         |
+| `<=-ss?`     | `<=-sd?`     | Less_or_equal    | True           | Yes        |
+| `<=-ssu?`    | `<=-sdu?`    | Less_or_equal    | True           | No         |
+| `>-ss?`      | `>-sd?`      | Greater          | False          | Yes        |
+| `>-ssu?`     | `>-sdu?`     | Greater          | False          | No         |
+| `>=-ss?`     | `>=-sd?`     | Greater_or_equal | False          | Yes        |
+| `>=-ssu?`    | `>=-sdu?`    | Greater_or_equal | False          | No         |
+| `/=-ss?`     | `/=-sd?`     | Not_equal        | False          | Yes        |
+| `/=-ssu?`    | `/=-sdu?`    | Not_equal        | False          | No         |
 
    Note that MSDN specifies different return values for the C
 counterparts of some of these functions when called with NaN arguments,

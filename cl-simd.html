@@ -1,0 +1,299 @@
+<h1 id="cl-simd">cl-simd</h1>
+<p>The <code>cl-simd</code> module provides access to SSE2 instructions (which are nowadays supported by any CPU compatible with x86-64) in the form of <em>intrinsic functions</em>, similar to the way adopted by modern C compilers. It also provides some lisp-specific functionality, like setf-able intrinsics for accessing lisp arrays.</p>
+<p>When this module is loaded, it defines an <code>:sse2</code> feature, which can be subsequently used for conditional compilation of code that depends on it. Intrinsic functions are available from the <code>sse</code> package.</p>
+<p>This API, with minor technical differences, is supported by both ECL and SBCL (x86-64 only).</p>
+<h2 id="sse-pack-types">SSE pack types</h2>
+<p>The package defines and/or exports the following types to represent 128-bit SSE register contents:</p>
+<p>-- Type: <em>sse-pack,sse</em> &amp;optional item-type The generic SSE pack type.</p>
+<p>-- Type: <em>int-sse-pack,sse</em> Same as <code>(sse-pack integer)</code>.</p>
+<p>-- Type: <em>float-sse-pack,sse</em> Same as <code>(sse-pack single-float)</code>.</p>
+<p>-- Type: <em>double-sse-pack,sse</em> Same as <code>(sse-pack double-float)</code>.</p>
+<p>Declaring variable types using the subtype appropriate for your data is likely to lead to more efficient code (especially on ECL). However, the compiler implicitly casts between any subtypes of sse-pack when needed.</p>
+<p>Printed representation of SSE packs can be controlled by binding <code>*sse-pack-print-mode*</code>:</p>
+<p>-- Variable: <em>sse-pack-print-mode,sse</em> When set to one of <code>:int</code>, <code>:float</code> or <code>:double</code>, specifies the way SSE packs are printed. A <code>NIL</code> value (default) instructs the implementation to make its best effort to guess from the data and context.</p>
+<h2 id="sse-array-type">SSE array type</h2>
+<p>-- Type: <em>sse-array,sse</em> element-type &amp;optional dimensions Expands to a lisp array type that is efficiently supported by AREF-like accessors. It should be assumed to be a subtype of <code>SIMPLE-ARRAY</code>. The type expander signals warnings or errors if it detects that the element-type argument value is inappropriate or unsafe.</p>
+<p>-- Function: <em>make-sse-array,sse</em> dimensions &amp;key element-type initial-element displaced-to displaced-index-offset Creates an object of type <code>sse-array</code>, or signals an error. In non-displaced case ensures alignment of the beginning of data to the 16-byte boundary. Unlike <code>make-array</code>, the element type defaults to (unsigned-byte 8).</p>
+<p>On ECL this function supports full-featured displacement. On SBCL it has to simulate it by sharing the underlying data vector, and does not support nonzero index offset.</p>
+<h2 id="differences-from-c-intrinsics">Differences from C intrinsics</h2>
+<p>Intel Compiler, GCC and MSVC (http://msdn.microsoft.com/en-us/library/y0dh78ez%28VS.80%29.aspx) all support the same set of SSE intrinsics, originally designed by Intel. This package generally follows the naming scheme of the C version, with the following exceptions:</p>
+<ul>
+<li><p>Underscores are replaced with dashes, and the <code>_mm_</code> prefix is removed in favor of packages.</p></li>
+<li><p>The <code>e</code> from <code>epi</code> is dropped because MMX is obsolete and won`t be supported.</p></li>
+<li><p><code>_si128</code> functions are renamed to <code>-pi</code> for uniformity and brevity. The author has personally found this discrepancy in the original C intrinsics naming highly jarring.</p></li>
+<li><p>Comparisons are named using graphic characters, e.g. <code>&lt;=-ps</code> for <code>cmpleps</code>, or <code>/&gt;-ps</code> for <code>cmpngtps</code>. In some places the set of comparison functions is extended to cover the full possible range.</p></li>
+<li><p>Scalar comparison predicates are named like <code>..-ss?</code> for <code>comiss</code>, and <code>..-ssu?</code> for <code>ucomiss</code> wrappers.</p></li>
+<li><p>Conversion functions are renamed to <code>convert-*-to-*</code> and <code>truncate-*-to-*</code>.</p></li>
+<li><p>A few functions are completely renamed: <code>cpu-mxcsr</code> (setf-able), <code>cpu-pause</code>, <code>cpu-load-fence</code>, <code>cpu-store-fence</code>, <code>cpu-memory-fence</code>, <code>cpu-clflush</code>, <code>cpu-prefetch-*</code>.</p></li>
+</ul>
+<p>In addition, foreign pointer access intrinsics have an additional optional integer offset parameter to allow more efficient coding of pointer deference, and the most common ones have been renamed and made SETF-able:</p>
+<ul>
+<li><p><code>mem-ref-ss</code>, <code>mem-ref-ps</code>, <code>mem-ref-aps</code></p></li>
+<li><p><code>mem-ref-sd</code>, <code>mem-ref-pd</code>, <code>mem-ref-apd</code></p></li>
+<li><p><code>mem-ref-pi</code>, <code>mem-ref-api</code>, <code>mem-ref-si64</code></p></li>
+</ul>
+<p>(The <code>-ap*</code> version requires alignment.)</p>
+<h2 id="comparisons-and-nan-handling">Comparisons and NaN handling</h2>
+<p>Floating-point arithmetic intrinsics have trivial IEEE semantics when given QNaN and SNaN arguments. Comparisons have more complex behavior, detailed in the following table:</p>
+<table>
+<thead>
+<tr class="header">
+<th align="left">Single-float</th>
+<th align="left">Double-float</th>
+<th align="left">Condition</th>
+<th align="left">Result for NaN</th>
+<th align="left">QNaN traps</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><code>=-ss</code>,<code>=-ps</code></td>
+<td align="left"><code>=-sd</code>,<code>=-pd</code></td>
+<td align="left">Equal</td>
+<td align="left">False</td>
+<td align="left">No</td>
+</tr>
+<tr class="even">
+<td align="left"><code>&lt;-ss</code>,<code>&lt;-ps</code></td>
+<td align="left"><code>&lt;-sd</code>,<code>&lt;-pd</code></td>
+<td align="left">Less</td>
+<td align="left">False</td>
+<td align="left">Yes</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>&lt;=-ss</code>,<code>&lt;=-ps</code></td>
+<td align="left"><code>&lt;=-sd</code>,<code>&lt;=-pd</code></td>
+<td align="left">Less or equal</td>
+<td align="left">False</td>
+<td align="left">Yes</td>
+</tr>
+<tr class="even">
+<td align="left"><code>&gt;-ss</code>,<code>&gt;-ps</code></td>
+<td align="left"><code>&gt;-sd</code>,<code>&gt;-pd</code></td>
+<td align="left">Greater</td>
+<td align="left">False</td>
+<td align="left">Yes</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>&gt;=-ss</code>,<code>&gt;=-ps</code></td>
+<td align="left"><code>&gt;=-sd</code>,<code>&gt;=-pd</code></td>
+<td align="left">Greater or equal</td>
+<td align="left">False</td>
+<td align="left">Yes</td>
+</tr>
+<tr class="even">
+<td align="left"><code>/=-ss</code>,<code>/=-ps</code></td>
+<td align="left"><code>/=-sd</code>,<code>/=-pd</code></td>
+<td align="left">Not equal</td>
+<td align="left">True</td>
+<td align="left">No</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>/&lt;-ss</code>,<code>/&lt;-ps</code></td>
+<td align="left"><code>/&lt;-sd</code>,<code>/&lt;-pd</code></td>
+<td align="left">Not less</td>
+<td align="left">True</td>
+<td align="left">Yes</td>
+</tr>
+<tr class="even">
+<td align="left"><code>/&lt;=-ss</code>,</td>
+<td align="left"><code>/&lt;=-sd</code>,</td>
+<td align="left">Not less or equal</td>
+<td align="left">True</td>
+<td align="left">Yes</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>/&lt;=-ps</code></td>
+<td align="left"><code>/&lt;=-pd</code></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr class="even">
+<td align="left"><code>/&gt;-ss</code>,<code>/&gt;-ps</code></td>
+<td align="left"><code>/&gt;-sd</code>,<code>/&gt;-pd</code></td>
+<td align="left">Not greater</td>
+<td align="left">True</td>
+<td align="left">Yes</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>/&gt;=-ss</code>,</td>
+<td align="left"><code>/&gt;=-sd</code>,</td>
+<td align="left">Not greater or equal</td>
+<td align="left">True</td>
+<td align="left">Yes</td>
+</tr>
+<tr class="even">
+<td align="left"><code>/&gt;=-ps</code></td>
+<td align="left"><code>/&gt;=-pd</code></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr class="odd">
+<td align="left"><code>cmpord-ss</code>,</td>
+<td align="left"><code>cmpord-sd</code>,</td>
+<td align="left">Ordered, i.e. no NaN args</td>
+<td align="left">False</td>
+<td align="left">No</td>
+</tr>
+<tr class="even">
+<td align="left"><code>cmpord-ps</code></td>
+<td align="left"><code>cmpord-pd</code></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr class="odd">
+<td align="left"><code>cmpunord-ss</code>,</td>
+<td align="left"><code>cmpunord-sd</code>,</td>
+<td align="left">Unordered, i.e. with NaN args</td>
+<td align="left">True</td>
+<td align="left">No</td>
+</tr>
+<tr class="even">
+<td align="left"><code>cmpunord-ps</code></td>
+<td align="left"><code>cmpunord-pd</code></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+</tbody>
+</table>
+<p>Likewise for scalar comparison predicates, i.e. functions that return the result of the comparison as a Lisp boolean instead of a bitmask sse-pack:</p>
+<table>
+<thead>
+<tr class="header">
+<th align="left">Single-float</th>
+<th align="left">Double-float</th>
+<th align="left">Condition</th>
+<th align="left">Result_for_NaN</th>
+<th align="left">QNaN_traps</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><code>=-ss?</code></td>
+<td align="left"><code>=-sd?</code></td>
+<td align="left">Equal</td>
+<td align="left">True</td>
+<td align="left">Yes</td>
+</tr>
+<tr class="even">
+<td align="left"><code>=-ssu?</code></td>
+<td align="left"><code>=-sdu?</code></td>
+<td align="left">Equal</td>
+<td align="left">True</td>
+<td align="left">No</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>&lt;-ss?</code></td>
+<td align="left"><code>&lt;-sd?</code></td>
+<td align="left">Less</td>
+<td align="left">True</td>
+<td align="left">Yes</td>
+</tr>
+<tr class="even">
+<td align="left"><code>&lt;-ssu?</code></td>
+<td align="left"><code>&lt;-sdu?</code></td>
+<td align="left">Less</td>
+<td align="left">True</td>
+<td align="left">No</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>&lt;=-ss?</code></td>
+<td align="left"><code>&lt;=-sd?</code></td>
+<td align="left">Less_or_equal</td>
+<td align="left">True</td>
+<td align="left">Yes</td>
+</tr>
+<tr class="even">
+<td align="left"><code>&lt;=-ssu?</code></td>
+<td align="left"><code>&lt;=-sdu?</code></td>
+<td align="left">Less_or_equal</td>
+<td align="left">True</td>
+<td align="left">No</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>&gt;-ss?</code></td>
+<td align="left"><code>&gt;-sd?</code></td>
+<td align="left">Greater</td>
+<td align="left">False</td>
+<td align="left">Yes</td>
+</tr>
+<tr class="even">
+<td align="left"><code>&gt;-ssu?</code></td>
+<td align="left"><code>&gt;-sdu?</code></td>
+<td align="left">Greater</td>
+<td align="left">False</td>
+<td align="left">No</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>&gt;=-ss?</code></td>
+<td align="left"><code>&gt;=-sd?</code></td>
+<td align="left">Greater_or_equal</td>
+<td align="left">False</td>
+<td align="left">Yes</td>
+</tr>
+<tr class="even">
+<td align="left"><code>&gt;=-ssu?</code></td>
+<td align="left"><code>&gt;=-sdu?</code></td>
+<td align="left">Greater_or_equal</td>
+<td align="left">False</td>
+<td align="left">No</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>/=-ss?</code></td>
+<td align="left"><code>/=-sd?</code></td>
+<td align="left">Not_equal</td>
+<td align="left">False</td>
+<td align="left">Yes</td>
+</tr>
+<tr class="even">
+<td align="left"><code>/=-ssu?</code></td>
+<td align="left"><code>/=-sdu?</code></td>
+<td align="left">Not_equal</td>
+<td align="left">False</td>
+<td align="left">No</td>
+</tr>
+</tbody>
+</table>
+<p>Note that MSDN specifies different return values for the C counterparts of some of these functions when called with NaN arguments, but that seems to disagree with the actually generated code.</p>
+<h2 id="simple-extensions">Simple extensions</h2>
+<p>This module extends the set of basic intrinsics with the following simple compound functions:</p>
+<ul>
+<li><p><code>neg-ss</code>, <code>neg-ps</code>, <code>neg-sd</code>, <code>neg-pd</code>, <code>neg-pi8</code>, <code>neg-pi16</code>, <code>neg-pi32</code>, <code>neg-pi64</code>:</p>
+<p>implement numeric negation of the corresponding data type.</p></li>
+<li><p><code>not-ps</code>, <code>not-pd</code>, <code>not-pi</code>:</p>
+<p>implement bitwise logical inversion.</p></li>
+<li><p><code>if-ps</code>, <code>if-pd</code>, <code>if-pi</code>:</p>
+<p>perform element-wise combining of two values based on a boolean condition vector produced as a combination of comparison function results through bitwise logical functions.</p>
+<p>The condition value must use all-zero bitmask for false, and all-one bitmask for true as a value for each logical vector element. The result is undefined if any other bit pattern is used.</p>
+<p>N.B.: these are <em>functions</em>, so both branches of the conditional are always evaluated.</p></li>
+</ul>
+<p>The module also provides symbol macros that expand into expressions producing certain constants in the most efficient way:</p>
+<ul>
+<li><p>0.0-ps 0.0-pd 0-pi for zero</p></li>
+<li><p>true-ps true-pd true-pi for all 1 bitmask</p></li>
+<li><p>false-ps false-pd false-pi for all 0 bitmask (same as zero)</p></li>
+</ul>
+<h2 id="lisp-array-accessors">Lisp array accessors</h2>
+<p>In order to provide better integration with ordinary lisp code, this module implements a set of AREF-like memory accessors:</p>
+<ul>
+<li><p><code>(ROW-MAJOR-)?AREF-PREFETCH-(T0|T1|T2|NTA)</code> for cache prefetch.</p></li>
+<li><p><code>(ROW-MAJOR-)?AREF-CLFLUSH</code> for cache flush.</p></li>
+<li><p><code>(ROW-MAJOR-)?AREF-[AS]?P[SDI]</code> for whole-pack read &amp; write.</p></li>
+<li><p><code>(ROW-MAJOR-)?AREF-S(S|D|I64)</code> for scalar read &amp; write.</p></li>
+</ul>
+<p>(Where A = aligned; S = aligned streamed write.)</p>
+<p>These accessors can be used with any non-bit specialized array or vector, without restriction on the precise element type (although it should be declared at compile time to ensure generation of the fastest code).</p>
+<p>Additional index bound checking is done to ensure that enough bytes of memory are accessible after the specified index.</p>
+<p>As an exception, ROW-MAJOR-AREF-PREFETCH-* does not do any range checks at all, because the prefetch instructions are officially safe to use with bad addresses. The AREF-PREFETCH-* and *-CLFLUSH functions do only ordinary index checks without the usual 16-byte extension.</p>
+<h2 id="example">Example</h2>
+<p>This code processes several single-float arrays, storing either the value of a*b, or c/3.5 into result, depending on the sign of mode:</p>
+<pre><code> (loop for i from 0 below 128 by 4
+    do (setf (aref-ps result i)
+             (if-ps (&lt;-ps (aref-ps mode i) 0.0-ps)
+                    (mul-ps (aref-ps a i) (aref-ps b i))
+                    (div-ps (aref-ps c i) (set1-ps 3.5)))))</code></pre>
+<p>As already noted above, both branches of the if are always evaluated.</p>
